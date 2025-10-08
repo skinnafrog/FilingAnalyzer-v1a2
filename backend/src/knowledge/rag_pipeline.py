@@ -656,6 +656,167 @@ class RAGPipeline:
             logger.error(f"Search failed: {e}")
             return []
 
+    async def _retrieve_from_database(
+        self,
+        query: str,
+        filters: Optional[Dict[str, Any]] = None,
+        limit: int = 5
+    ) -> List[Dict[str, Any]]:
+        """
+        Retrieve documents directly from database.
+
+        Args:
+            query: Search query
+            filters: Optional filters
+            limit: Maximum number of documents
+
+        Returns:
+            List of document chunks with metadata
+        """
+        from ..database import get_db_context
+        from ..database.models import Filing, Company, FilingDocument, FilingChunk
+        from sqlalchemy import or_, and_, func
+
+        try:
+            with get_db_context() as db:
+                # Build base query joining tables
+                query_obj = db.query(
+                    FilingChunk,
+                    Filing,
+                    Company,
+                    FilingDocument
+                ).join(
+                    Filing, FilingChunk.filing_id == Filing.id
+                ).join(
+                    Company, Filing.company_id == Company.id
+                ).join(
+                    FilingDocument, FilingChunk.document_id == FilingDocument.id
+                )
+
+                # Apply filters if provided
+                if filters:
+                    logger.info(f"Applying filters: {filters}")
+                    if filters.get("company"):
+                        query_obj = query_obj.filter(
+                            or_(
+                                Company.name.ilike(f"%{filters['company']}%"),
+                                Company.ticker == filters['company'].upper()
+                            )
+                        )
+                    if filters.get("form_type"):
+                        query_obj = query_obj.filter(Filing.form_type == filters["form_type"])
+                    if filters.get("accession_number"):
+                        query_obj = query_obj.filter(Filing.accession_number == filters["accession_number"])
+
+                # Search in chunk text and document content
+                if query:
+                    search_pattern = f"%{query}%"
+                    query_obj = query_obj.filter(
+                        or_(
+                            FilingChunk.text.ilike(search_pattern),
+                            Company.name.ilike(search_pattern),
+                            Filing.summary.ilike(search_pattern) if hasattr(Filing, 'summary') else False
+                        )
+                    )
+
+                # Order by relevance (simple text matching for now)
+                # In production, use proper text search or vector similarity
+                query_obj = query_obj.order_by(Filing.filing_date.desc())
+
+                # Limit results
+                results = query_obj.limit(limit).all()
+
+                # Format results
+                formatted_results = []
+                for chunk, filing, company, document in results:
+                    formatted_results.append({
+                        "text": chunk.text[:1000] if chunk.text else "",  # Limit text length
+                        "accession_number": filing.accession_number,
+                        "company_name": company.name,
+                        "ticker_symbol": company.ticker if hasattr(company, 'ticker') else None,
+                        "form_type": filing.form_type,
+                        "filing_date": filing.filing_date.isoformat() if filing.filing_date else "",
+                        "chunk_index": chunk.chunk_index if hasattr(chunk, 'chunk_index') else 0,
+                        "document_type": document.document_type if hasattr(document, 'document_type') else filing.form_type,
+                        "score": 0.85,  # Default relevance score
+                        "metadata": chunk.metadata_json if hasattr(chunk, 'metadata_json') else {}
+                    })
+
+                # If no chunks found, try to get filing documents directly
+                if not formatted_results:
+                    logger.info("No chunks found, trying filing documents directly")
+
+                    # Query filing documents directly
+                    doc_query = db.query(
+                        FilingDocument,
+                        Filing,
+                        Company
+                    ).join(
+                        Filing, FilingDocument.filing_id == Filing.id
+                    ).join(
+                        Company, Filing.company_id == Company.id
+                    )
+
+                    # Apply same filters
+                    if filters:
+                        logger.info(f"Applying filters to documents query: {filters}")
+                        if filters.get("company"):
+                            doc_query = doc_query.filter(
+                                or_(
+                                    Company.name.ilike(f"%{filters['company']}%"),
+                                    Company.ticker == filters['company'].upper()
+                                )
+                            )
+                        if filters.get("form_type"):
+                            doc_query = doc_query.filter(Filing.form_type == filters["form_type"])
+                        if filters.get("accession_number"):
+                            doc_query = doc_query.filter(Filing.accession_number == filters["accession_number"])
+
+                    # If no specific query but filters exist, just filter by company/form
+                    # Otherwise apply text search
+                    if not query and filters:
+                        logger.info("No query text, using filters only")
+                        # Just filter by company/form, don't search text
+                    elif query:
+                        # Only search text if there's an actual query
+                        search_pattern = f"%{query}%"
+                        logger.info(f"Searching documents for pattern: {search_pattern[:50]}...")
+                        doc_query = doc_query.filter(
+                            or_(
+                                FilingDocument.text_content.ilike(search_pattern),
+                                Company.name.ilike(search_pattern),
+                                Filing.summary.ilike(search_pattern) if Filing.summary else False
+                            )
+                        )
+
+                    doc_query = doc_query.order_by(Filing.filing_date.desc())
+                    doc_results = doc_query.limit(limit).all()
+
+                    for document, filing, company in doc_results:
+                        # Create chunks from document text on the fly
+                        text_content = document.text_content if document.text_content else filing.summary if hasattr(filing, 'summary') else ""
+                        if text_content:
+                            # Take first 1000 chars as a chunk
+                            formatted_results.append({
+                                "text": text_content[:1000],
+                                "accession_number": filing.accession_number,
+                                "company_name": company.name,
+                                "ticker_symbol": company.ticker if hasattr(company, 'ticker') else None,
+                                "form_type": filing.form_type,
+                                "filing_date": filing.filing_date.isoformat() if filing.filing_date else "",
+                                "chunk_index": 0,
+                                "document_type": document.document_type if hasattr(document, 'document_type') else filing.form_type,
+                                "score": 0.75,  # Lower score for non-chunk results
+                                "metadata": {}
+                            })
+
+                logger.info(f"Retrieved {len(formatted_results)} documents from database")
+                return formatted_results
+
+        except Exception as e:
+            logger.error(f"Database retrieval error: {e}", exc_info=True)
+            return []
+
     def get_statistics(self) -> Dict[str, Any]:
         """
         Get RAG pipeline statistics.
@@ -691,25 +852,21 @@ class RAGPipeline:
         Returns:
             List of relevant document chunks
         """
-        # For now, using the search method
-        # In production, this would query Qdrant or other vector store
-        results = await self.search_similar(query, k=limit, filters=filters)
+        try:
+            # First try vector search if available
+            results = await self.search_similar(query, k=limit, filters=filters)
 
-        # If no results from vector store, return mock data for testing
-        if not results:
-            logger.warning("No results from vector store, returning mock data")
-            return [
-                {
-                    "text": "This is a placeholder response. The RAG system is not fully connected to the vector database yet.",
-                    "accession_number": "TEST-001",
-                    "company_name": "Test Company",
-                    "form_type": "10-K",
-                    "filing_date": "2024-01-01",
-                    "score": 0.95
-                }
-            ]
+            # If no results from vector store, query database directly
+            if not results:
+                logger.info("Falling back to database search")
+                results = await self._retrieve_from_database(query, filters, limit)
 
-        return results
+            return results
+
+        except Exception as e:
+            logger.error(f"Retrieval error: {e}")
+            # Return empty list on error to avoid breaking the chat
+            return []
 
     async def generate_response(
         self,

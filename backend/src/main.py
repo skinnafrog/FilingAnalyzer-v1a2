@@ -176,11 +176,11 @@ class IngestionPipeline:
                                 chunk = FilingChunk(
                                     filing_id=db_filing.id,
                                     document_id=doc.id,
-                                    text=chunk_data.get('text', ''),
+                                    text=chunk_data.get('content', ''),  # Changed from 'text' to 'content'
                                     chunk_index=i,
                                     vector_id=chunk_data.get('vector_id'),
                                     embedding_model=self.settings.EMBEDDING_MODEL,
-                                    token_count=chunk_data.get('tokens', 0),
+                                    token_count=chunk_data.get('token_count', 0),  # Changed from 'tokens' to 'token_count'
                                     metadata_json=chunk_data.get('metadata', {})
                                 )
                                 db.add(chunk)
