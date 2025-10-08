@@ -89,3 +89,7 @@ Desktop.ini
 *.crt
 *.p12
 secrets/
+
+# Embedded git repositories (reference only)
+planning-docs/
+reference-repos/

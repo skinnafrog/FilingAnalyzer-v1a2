@@ -59,13 +59,14 @@ This project uses the PRP (Product Requirement Prompt) framework from `planning-
 
 ### Implementation Phases
 
-1. **Phase 1**: Data Ingestion Pipeline (Priority)
+1. **Phase 1**: Data Ingestion Pipeline ✅ (Implemented)
    - RSS feed parsing and monitoring
    - SEC filing download and processing
    - Docling integration for document extraction
    - Knowledge graph and RAG ingestion
+   - See [INGESTION_PROCESS.md](./INGESTION_PROCESS.md) for detailed documentation
 
-2. **Phase 2**: Backend Infrastructure
+2. **Phase 2**: Backend Infrastructure (In Progress)
    - Authentication system
    - Watchlist management
    - Database schemas
@@ -82,6 +83,31 @@ This project uses the PRP (Product Requirement Prompt) framework from `planning-
    - Watchlist interface
    - Chat interface with citations
    - Filing viewer
+
+## Ingestion Pipeline Details
+
+The SEC filing ingestion pipeline is fully implemented and operational. Key components:
+
+### File Locations
+- **Orchestrator**: `backend/src/main.py:IngestionPipeline`
+- **Celery Tasks**: `backend/src/tasks.py`
+- **RSS Monitor**: `backend/src/ingestion/rss_monitor.py`
+- **Downloader**: `backend/src/ingestion/filing_downloader.py`
+- **Processor**: `backend/src/ingestion/docling_processor.py`
+- **RAG Pipeline**: `backend/src/knowledge/rag_pipeline.py`
+
+### Processing Flow
+1. Celery Beat triggers `ingest_sec_filings` task every 10 minutes during market hours
+2. RSS Monitor discovers new filings from SEC feed
+3. Downloader retrieves documents with rate limiting (10 req/sec max)
+4. Docling Processor extracts structured content
+5. RAG Pipeline generates embeddings and updates knowledge graph
+6. Data persisted to PostgreSQL, Neo4j, and Qdrant
+
+### Monitoring
+- Flower UI: http://localhost:5555 (Celery task monitoring)
+- Logs: `backend/ingestion.log`
+- Status endpoint: `GET /api/ingestion/status`
 
 ## Configuration
 
