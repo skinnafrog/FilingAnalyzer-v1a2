@@ -16,6 +16,7 @@ from src.ingestion.rss_monitor import RSSMonitor
 from src.ingestion.filing_downloader import FilingDownloader
 from src.ingestion.docling_processor import DoclingProcessor
 from src.knowledge.rag_pipeline import RAGPipeline
+from src.knowledge.neo4j_store import Neo4jStore
 from src.database import init_db, get_db_context
 from src.database.models import Filing, Company, FilingDocument, FilingChunk
 
@@ -58,6 +59,14 @@ class IngestionPipeline:
             logger.error(f"Failed to initialize Docling converter: {e}")
             self.processor = None
         self.rag_pipeline = RAGPipeline(self.settings)
+
+        # Initialize Neo4j store
+        try:
+            self.neo4j_store = Neo4jStore(self.settings)
+            logger.info("Neo4j knowledge graph initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize Neo4j store: {e}")
+            self.neo4j_store = None
 
         # Track processing
         self.processed_filings: List[str] = []
@@ -178,6 +187,18 @@ class IngestionPipeline:
 
                         db.commit()
                         logger.info(f"Saved filing {filing.accession_number} to database")
+
+                        # Store in Neo4j knowledge graph
+                        if self.neo4j_store:
+                            try:
+                                company_data = {
+                                    "sic_code": company.sic_code if hasattr(company, 'sic_code') else None,
+                                    "state": company.state if hasattr(company, 'state') else None
+                                }
+                                self.neo4j_store.store_filing(filing, company_data)
+                                logger.info(f"Stored filing {filing.accession_number} in Neo4j")
+                            except Exception as neo4j_error:
+                                logger.error(f"Failed to store in Neo4j: {neo4j_error}")
                 except Exception as e:
                     logger.error(f"Failed to save filing to database: {e}")
 
@@ -254,7 +275,7 @@ class IngestionPipeline:
 
     def get_statistics(self) -> dict:
         """Get pipeline statistics."""
-        return {
+        stats = {
             "rss_monitor": self.rss_monitor.get_status(),
             "downloader": self.downloader.get_statistics(),
             "processor": self.processor.get_statistics(),
@@ -267,6 +288,16 @@ class IngestionPipeline:
                 if (self.processed_filings or self.failed_filings) else 0
             )
         }
+
+        # Add Neo4j statistics if available
+        if self.neo4j_store:
+            try:
+                stats["neo4j"] = self.neo4j_store.get_statistics()
+            except Exception as e:
+                logger.warning(f"Failed to get Neo4j statistics: {e}")
+                stats["neo4j"] = {}
+
+        return stats
 
 
 async def main():

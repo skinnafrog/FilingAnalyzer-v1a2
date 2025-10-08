@@ -152,51 +152,79 @@ class RSSMonitor:
         Returns:
             RSSFeedEntry with extracted fields
         """
+        # Parse title format: "FORM_TYPE - COMPANY_NAME (CIK) (Role)"
+        title = entry.get("title", "")
+        title_parts = title.split(" - ", 1)
+        form_type = title_parts[0].strip() if title_parts else ""
+
+        # Extract company name and CIK from title
+        company_info = title_parts[1] if len(title_parts) > 1 else ""
+        company_name = company_info
+        cik_number = ""
+
+        # Look for CIK in parentheses
+        if "(" in company_info:
+            import re
+            cik_match = re.search(r'\((\d{7,10})\)', company_info)
+            if cik_match:
+                cik_number = cik_match.group(1).zfill(10)
+                # Extract company name before the CIK
+                company_name = company_info[:company_info.index("(")].strip()
+
+        # Extract accession number from id field
+        # Format: "urn:tag:sec.gov,2008:accession-number=0001234567-89-012345"
+        entry_id = entry.get("id", "")
+        accession_number = ""
+        if "accession-number=" in entry_id:
+            accession_number = entry_id.split("accession-number=")[-1]
+
+        # Parse summary for filing details
+        summary = entry.get("summary", "")
+        filing_date = ""
+        file_size = ""
+
+        # Extract from summary HTML: "Filed: YYYY-MM-DD AccNo: ... Size: ..."
+        if "Filed:" in summary:
+            import re
+            date_match = re.search(r'Filed:\s*(\d{4}-\d{2}-\d{2})', summary)
+            if date_match:
+                filing_date = date_match.group(1)
+
+            size_match = re.search(r'Size:\s*([\d,]+\s*[KMG]?B)', summary)
+            if size_match:
+                file_size = size_match.group(1)
+
         # Get basic fields
         rss_entry = RSSFeedEntry(
             title=entry.get("title", ""),
             link=entry.get("link", ""),
             published=self._parse_datetime(entry.get("published")),
             updated=self._parse_datetime(entry.get("updated")),
-            summary=entry.get("summary")
+            summary=entry.get("summary", "")
         )
 
-        # Extract EDGAR namespace fields (edgar:*)
-        edgar_fields = {
-            "edgar_xbrlfiling": {},
-            "edgar_assistantdirector": None,
-            "edgar_assignedsic": None,
-            "edgar_fiscalyearend": None
-        }
+        # Set extracted fields
+        rss_entry.company_name = company_name
+        rss_entry.cik_number = cik_number
+        rss_entry.form_type = form_type
+        rss_entry.filing_date = filing_date
+        rss_entry.accession_number = accession_number
+        # Note: file_size is not part of RSSFeedEntry model
 
-        # Different feed formats may use different namespaces
+        # Check for EDGAR namespace fields if present
         for key, value in entry.items():
             if key.startswith("edgar_"):
-                edgar_fields[key] = value
-
-        # Extract company and filing information
-        xbrl_filing = edgar_fields.get("edgar_xbrlfiling", {})
-
-        rss_entry.company_name = xbrl_filing.get("edgar_companyname", entry.get("title", "").split(" - ")[0])
-        rss_entry.cik_number = str(xbrl_filing.get("edgar_ciknumber", "")).zfill(10)
-        rss_entry.form_type = xbrl_filing.get("edgar_formtype", "")
-        rss_entry.filing_date = xbrl_filing.get("edgar_filingdate", "")
-        rss_entry.accession_number = xbrl_filing.get("edgar_accessionnumber", "")
-        rss_entry.file_number = xbrl_filing.get("edgar_filenumber")
-        rss_entry.acceptance_datetime = xbrl_filing.get("edgar_acceptancedatetime")
-        rss_entry.period = xbrl_filing.get("edgar_period")
-
-        # Additional metadata
-        rss_entry.assistant_director = edgar_fields.get("edgar_assistantdirector")
-        rss_entry.assigned_sic = edgar_fields.get("edgar_assignedsic")
-        rss_entry.fiscal_year_end = edgar_fields.get("edgar_fiscalyearend")
-
-        # Extract XBRL files if present
-        xbrl_files = xbrl_filing.get("edgar_xbrlfiles", {})
-        if isinstance(xbrl_files, dict):
-            rss_entry.xbrl_files = [
-                {"name": k, "url": v} for k, v in xbrl_files.items()
-            ]
+                # Handle EDGAR-specific fields if they exist
+                if key == "edgar_xbrlfiling" and isinstance(value, dict):
+                    # Override with more specific data if available
+                    rss_entry.company_name = value.get("edgar_companyname", rss_entry.company_name)
+                    rss_entry.cik_number = str(value.get("edgar_ciknumber", rss_entry.cik_number)).zfill(10)
+                    rss_entry.form_type = value.get("edgar_formtype", rss_entry.form_type)
+                    rss_entry.filing_date = value.get("edgar_filingdate", rss_entry.filing_date)
+                    rss_entry.accession_number = value.get("edgar_accessionnumber", rss_entry.accession_number)
+                    rss_entry.file_number = value.get("edgar_filenumber")
+                    rss_entry.acceptance_datetime = value.get("edgar_acceptancedatetime")
+                    rss_entry.period = value.get("edgar_period")
 
         return rss_entry
 
