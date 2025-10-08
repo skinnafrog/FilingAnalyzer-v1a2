@@ -115,20 +115,21 @@ class CallbackTask(Task):
 
 
 @app.task(base=CallbackTask, bind=True, max_retries=3)
-def ingest_sec_filings(self, limit: Optional[int] = None):
+def ingest_sec_filings(self, limit: Optional[int] = None, force: bool = False):
     """
     Main task for ingesting SEC filings.
-    Only runs during market hours.
+    Only runs during market hours unless forced.
 
     Args:
         limit: Optional limit on number of filings to process
+        force: If True, bypass market hours check (for manual triggers)
 
     Returns:
         dict: Statistics about the ingestion run
     """
     try:
-        # Check if we're in market hours
-        if not is_market_hours():
+        # Check if we're in market hours (skip check if forced)
+        if not force and not is_market_hours():
             logger.info("Outside market hours, skipping ingestion")
             return {
                 'status': 'skipped',
@@ -266,6 +267,7 @@ def get_ingestion_status():
 def manual_ingest(limit: int = 5):
     """
     Manually trigger ingestion from UI.
+    Bypasses market hours check.
 
     Args:
         limit: Number of filings to process
@@ -275,13 +277,14 @@ def manual_ingest(limit: int = 5):
     """
     logger.info(f"Manual ingestion triggered (limit={limit})")
 
-    # Call the main ingestion task
-    result = ingest_sec_filings.apply_async(args=[limit])
+    # Call the main ingestion task with force=True to bypass market hours check
+    result = ingest_sec_filings.apply_async(args=[limit], kwargs={'force': True})
 
     return {
         'task_id': result.id,
         'status': 'queued',
         'limit': limit,
+        'forced': True,
         'timestamp': datetime.utcnow().isoformat()
     }
 

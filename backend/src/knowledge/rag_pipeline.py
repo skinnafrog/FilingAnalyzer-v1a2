@@ -895,7 +895,7 @@ class RAGPipeline:
         try:
             # Build context string from retrieved documents
             context_str = "\n\n".join([
-                f"[Source: {doc.get('company_name', 'Unknown')} - {doc.get('form_type', 'Unknown')}]\n{doc.get('text', '')}"
+                f"[Source: {doc.get('company_name', 'Unknown')} - {doc.get('form_type', 'Unknown')} - Accession: {doc.get('accession_number', 'Unknown')}]\n{doc.get('text', '')}"
                 for doc in context[:3]  # Use top 3 documents
             ])
 
@@ -903,10 +903,12 @@ class RAGPipeline:
             messages = [
                 {
                     "role": "system",
-                    "content": """You are a financial analyst AI assistant.
+                    "content": """You are a financial analyst AI assistant specializing in SEC filings.
                     Answer questions based on the provided SEC filing context.
                     Be precise and cite specific information from the filings.
-                    If the context doesn't contain enough information, say so."""
+                    When asked about a specific accession number, focus on the filing with that accession number.
+                    Always mention the accession number when discussing specific filings.
+                    If the context doesn't contain information about the requested filing, clearly state that."""
                 }
             ]
 
@@ -966,10 +968,12 @@ class RAGPipeline:
             messages = [
                 {
                     "role": "system",
-                    "content": """You are a financial analyst AI assistant.
+                    "content": """You are a financial analyst AI assistant specializing in SEC filings.
                     Answer questions based on the provided SEC filing context.
                     Be precise and cite specific information from the filings.
-                    If the context doesn't contain enough information, say so."""
+                    When asked about a specific accession number, focus on the filing with that accession number.
+                    Always mention the accession number when discussing specific filings.
+                    If the context doesn't contain information about the requested filing, clearly state that."""
                 }
             ]
 
