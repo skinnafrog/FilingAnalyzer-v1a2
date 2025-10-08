@@ -73,8 +73,13 @@ class Neo4jStore:
                 # Create indexes for search performance
                 indexes = [
                     "CREATE INDEX company_name IF NOT EXISTS FOR (c:Company) ON (c.name)",
+                    "CREATE INDEX company_ticker IF NOT EXISTS FOR (c:Company) ON (c.ticker)",
+                    "CREATE INDEX company_exchange IF NOT EXISTS FOR (c:Company) ON (c.exchange)",
+                    "CREATE INDEX company_industry IF NOT EXISTS FOR (c:Company) ON (c.industry)",
+                    "CREATE INDEX company_sector IF NOT EXISTS FOR (c:Company) ON (c.sector)",
                     "CREATE INDEX filing_date IF NOT EXISTS FOR (f:Filing) ON (f.filing_date)",
                     "CREATE INDEX filing_type IF NOT EXISTS FOR (f:Filing) ON (f.form_type)",
+                    "CREATE INDEX filing_period IF NOT EXISTS FOR (f:Filing) ON (f.period_date)",
                     "CREATE INDEX person_name IF NOT EXISTS FOR (p:Person) ON (p.name)"
                 ]
 
@@ -102,12 +107,23 @@ class Neo4jStore:
         """
         try:
             with self.driver.session(database=self.database) as session:
-                # Create or update Company node
+                # Create or update Company node with comprehensive data
                 company_query = """
                 MERGE (c:Company {cik: $cik})
                 SET c.name = $name,
+                    c.ticker = $ticker,
+                    c.exchange = $exchange,
                     c.sic_code = $sic_code,
+                    c.industry = $industry,
+                    c.sector = $sector,
                     c.state = $state,
+                    c.state_of_incorporation = $state_of_incorporation,
+                    c.business_address = $business_address,
+                    c.mailing_address = $mailing_address,
+                    c.phone = $phone,
+                    c.website = $website,
+                    c.fiscal_year_end = $fiscal_year_end,
+                    c.irs_number = $irs_number,
                     c.updated_at = datetime()
                 RETURN c
                 """
@@ -116,18 +132,42 @@ class Neo4jStore:
                     company_query,
                     cik=filing.cik_number,
                     name=filing.company_name,
+                    ticker=getattr(filing, 'ticker_symbol', None) or company_data.get("ticker"),
+                    exchange=company_data.get("exchange"),
                     sic_code=company_data.get("sic_code"),
-                    state=company_data.get("state")
+                    industry=company_data.get("industry"),
+                    sector=company_data.get("sector"),
+                    state=company_data.get("state"),
+                    state_of_incorporation=company_data.get("state_of_incorporation"),
+                    business_address=company_data.get("business_address"),
+                    mailing_address=company_data.get("mailing_address"),
+                    phone=company_data.get("phone"),
+                    website=company_data.get("website"),
+                    fiscal_year_end=company_data.get("fiscal_year_end"),
+                    irs_number=company_data.get("irs_number")
                 )
 
-                # Create Filing node
+                # Create Filing node with comprehensive metadata
                 filing_query = """
                 MERGE (f:Filing {accession_number: $accession_number})
                 SET f.form_type = $form_type,
                     f.filing_date = $filing_date,
                     f.period_of_report = $period,
+                    f.period_date = $period_date,
                     f.document_count = $doc_count,
                     f.file_url = $file_url,
+                    f.filing_html_url = $filing_html_url,
+                    f.filing_xml_url = $filing_xml_url,
+                    f.xbrl_zip_url = $xbrl_zip_url,
+                    f.file_number = $file_number,
+                    f.film_number = $film_number,
+                    f.acceptance_datetime = $acceptance_datetime,
+                    f.items = $items,
+                    f.size_bytes = $size_bytes,
+                    f.is_xbrl = $is_xbrl,
+                    f.is_inline_xbrl = $is_inline_xbrl,
+                    f.primary_document = $primary_document,
+                    f.primary_doc_description = $primary_doc_description,
                     f.processed_at = datetime()
                 RETURN f
                 """
@@ -138,8 +178,21 @@ class Neo4jStore:
                     form_type=filing.form_type,
                     filing_date=filing.filing_date.isoformat() if filing.filing_date else None,
                     period=getattr(filing, 'period', None),
+                    period_date=getattr(filing, 'period_date', None).isoformat() if getattr(filing, 'period_date', None) else None,
                     doc_count=len(getattr(filing, 'document_urls', [])),
-                    file_url=getattr(filing, 'filing_html_url', None)
+                    file_url=str(getattr(filing, 'filing_url', None)) if getattr(filing, 'filing_url', None) else None,
+                    filing_html_url=str(getattr(filing, 'filing_html_url', None)) if getattr(filing, 'filing_html_url', None) else None,
+                    filing_xml_url=str(getattr(filing, 'filing_xml_url', None)) if getattr(filing, 'filing_xml_url', None) else None,
+                    xbrl_zip_url=str(getattr(filing, 'xbrl_zip_url', None)) if getattr(filing, 'xbrl_zip_url', None) else None,
+                    file_number=getattr(filing, 'file_number', None),
+                    film_number=getattr(filing, 'film_number', None),
+                    acceptance_datetime=getattr(filing, 'acceptance_datetime', None),
+                    items=getattr(filing, 'items', None),
+                    size_bytes=getattr(filing, 'size_bytes', None),
+                    is_xbrl=getattr(filing, 'is_xbrl', False),
+                    is_inline_xbrl=getattr(filing, 'is_inline_xbrl', False),
+                    primary_document=getattr(filing, 'primary_document', None),
+                    primary_doc_description=getattr(filing, 'primary_doc_description', None)
                 )
 
                 # Create relationship between Company and Filing
@@ -164,6 +217,14 @@ class Neo4jStore:
                 # Store shareholders if available
                 if getattr(filing, 'shareholders', None):
                     self._store_shareholders(session, filing)
+
+                # Store executive officers if available
+                if getattr(filing, 'officers', None):
+                    self._store_officers(session, filing, company_data)
+
+                # Store insider transactions if available
+                if getattr(filing, 'insider_transactions', None):
+                    self._store_insider_transactions(session, filing)
 
                 logger.info(f"Stored filing {filing.accession_number} in Neo4j")
                 return True
@@ -234,6 +295,91 @@ class Neo4jStore:
         except Exception as e:
             logger.warning(f"Failed to store shareholders: {e}")
 
+    def _store_officers(self, session, filing: SECFiling, company_data: Dict[str, Any]):
+        """Store executive officers and directors."""
+        try:
+            officers = getattr(filing, 'officers', [])
+            for officer in officers:
+                officer_query = """
+                MERGE (p:Person {name: $name, company_cik: $cik})
+                SET p.title = $title,
+                    p.is_director = $is_director,
+                    p.is_officer = $is_officer,
+                    p.is_ten_percent_owner = $is_ten_percent_owner,
+                    p.officer_since = $officer_since,
+                    p.age = $age,
+                    p.updated_at = datetime()
+                WITH p
+                MATCH (c:Company {cik: $cik})
+                MERGE (p)-[r:WORKS_FOR]->(c)
+                SET r.role = $title,
+                    r.is_current = true
+                WITH p
+                MATCH (f:Filing {accession_number: $accession_number})
+                MERGE (f)-[:REPORTS_OFFICER]->(p)
+                RETURN p
+                """
+
+                session.run(
+                    officer_query,
+                    name=officer.get("name"),
+                    cik=filing.cik_number,
+                    title=officer.get("title"),
+                    is_director=officer.get("is_director", False),
+                    is_officer=officer.get("is_officer", True),
+                    is_ten_percent_owner=officer.get("is_ten_percent_owner", False),
+                    officer_since=officer.get("officer_since"),
+                    age=officer.get("age"),
+                    accession_number=filing.accession_number
+                )
+
+        except Exception as e:
+            logger.warning(f"Failed to store officers: {e}")
+
+    def _store_insider_transactions(self, session, filing: SECFiling):
+        """Store insider trading transactions."""
+        try:
+            transactions = getattr(filing, 'insider_transactions', [])
+            for transaction in transactions:
+                transaction_query = """
+                MERGE (t:Transaction {transaction_id: $transaction_id})
+                SET t.transaction_date = $transaction_date,
+                    t.transaction_type = $transaction_type,
+                    t.shares = $shares,
+                    t.price_per_share = $price_per_share,
+                    t.total_value = $total_value,
+                    t.shares_owned_after = $shares_owned_after,
+                    t.is_direct = $is_direct
+                WITH t
+                MATCH (f:Filing {accession_number: $accession_number})
+                MERGE (f)-[:CONTAINS_TRANSACTION]->(t)
+                WITH t
+                MATCH (p:Person {name: $insider_name, company_cik: $cik})
+                MERGE (p)-[:EXECUTED_TRANSACTION]->(t)
+                WITH t
+                MATCH (c:Company {cik: $cik})
+                MERGE (t)-[:TRANSACTION_IN]->(c)
+                RETURN t
+                """
+
+                session.run(
+                    transaction_query,
+                    transaction_id=transaction.get("transaction_id", f"{filing.accession_number}_{transaction.get('transaction_date')}_{transaction.get('insider_name')}"),
+                    transaction_date=transaction.get("transaction_date"),
+                    transaction_type=transaction.get("transaction_type"),
+                    shares=transaction.get("shares"),
+                    price_per_share=transaction.get("price_per_share"),
+                    total_value=transaction.get("total_value"),
+                    shares_owned_after=transaction.get("shares_owned_after"),
+                    is_direct=transaction.get("is_direct", True),
+                    insider_name=transaction.get("insider_name"),
+                    cik=filing.cik_number,
+                    accession_number=filing.accession_number
+                )
+
+        except Exception as e:
+            logger.warning(f"Failed to store insider transactions: {e}")
+
     def create_filing_relationships(self, filing: SECFiling, related_companies: List[str]):
         """
         Create relationships between filings and mentioned companies.
@@ -283,7 +429,11 @@ class Neo4jStore:
                 RETURN f.accession_number as accession_number,
                        f.form_type as form_type,
                        f.filing_date as filing_date,
-                       f.file_url as url
+                       f.period_of_report as period,
+                       f.file_url as url,
+                       f.filing_html_url as html_url,
+                       f.size_bytes as size,
+                       f.is_xbrl as is_xbrl
                 ORDER BY f.filing_date DESC
                 LIMIT $limit
                 """
@@ -337,7 +487,14 @@ class Neo4jStore:
                 cypher_query = """
                 MATCH (c:Company)
                 WHERE toLower(c.name) CONTAINS toLower($query)
-                RETURN c.name as name, c.cik as cik
+                   OR toLower(c.ticker) CONTAINS toLower($query)
+                   OR c.cik = $query
+                RETURN c.name as name,
+                       c.cik as cik,
+                       c.ticker as ticker,
+                       c.exchange as exchange,
+                       c.industry as industry,
+                       c.sector as sector
                 LIMIT 10
                 """
 
@@ -347,6 +504,71 @@ class Neo4jStore:
         except Exception as e:
             logger.error(f"Failed to search companies: {e}")
             return []
+
+    def get_company_details(self, cik: str) -> Dict[str, Any]:
+        """
+        Get comprehensive company information.
+
+        Args:
+            cik: Company CIK number
+
+        Returns:
+            Dictionary with full company details
+        """
+        try:
+            with self.driver.session(database=self.database) as session:
+                query = """
+                MATCH (c:Company {cik: $cik})
+                OPTIONAL MATCH (c)<-[:WORKS_FOR]-(officer:Person)
+                WHERE officer.is_officer = true OR officer.is_director = true
+                OPTIONAL MATCH (c)<-[:OWNS_SHARES_IN]-(shareholder:Person)
+                OPTIONAL MATCH (c)-[:FILED]->(f:Filing)
+                WITH c,
+                     COLLECT(DISTINCT {
+                         name: officer.name,
+                         title: officer.title,
+                         is_director: officer.is_director,
+                         is_officer: officer.is_officer
+                     }) as officers,
+                     COLLECT(DISTINCT {
+                         name: shareholder.name,
+                         shares: shareholder.shares,
+                         percentage: shareholder.percentage
+                     }) as shareholders,
+                     COUNT(DISTINCT f) as filing_count,
+                     MAX(f.filing_date) as last_filing_date
+                RETURN c.name as name,
+                       c.cik as cik,
+                       c.ticker as ticker,
+                       c.exchange as exchange,
+                       c.sic_code as sic_code,
+                       c.industry as industry,
+                       c.sector as sector,
+                       c.state as state,
+                       c.state_of_incorporation as state_of_incorporation,
+                       c.business_address as business_address,
+                       c.mailing_address as mailing_address,
+                       c.phone as phone,
+                       c.website as website,
+                       c.fiscal_year_end as fiscal_year_end,
+                       c.irs_number as irs_number,
+                       officers,
+                       shareholders,
+                       filing_count,
+                       last_filing_date
+                """
+
+                result = session.run(query, cik=cik)
+                record = result.single()
+
+                if record:
+                    return dict(record)
+                else:
+                    return {}
+
+        except Exception as e:
+            logger.error(f"Failed to get company details: {e}")
+            return {}
 
     def get_statistics(self) -> Dict[str, Any]:
         """Get knowledge graph statistics."""

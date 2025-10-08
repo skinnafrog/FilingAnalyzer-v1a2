@@ -191,9 +191,21 @@ class IngestionPipeline:
                         # Store in Neo4j knowledge graph
                         if self.neo4j_store:
                             try:
+                                # Gather comprehensive company data
                                 company_data = {
+                                    "ticker": company.ticker if hasattr(company, 'ticker') else filing.ticker_symbol,
+                                    "exchange": company.exchange if hasattr(company, 'exchange') else None,
                                     "sic_code": company.sic_code if hasattr(company, 'sic_code') else None,
-                                    "state": company.state if hasattr(company, 'state') else None
+                                    "industry": company.industry if hasattr(company, 'industry') else None,
+                                    "sector": company.sector if hasattr(company, 'sector') else None,
+                                    "state": company.state if hasattr(company, 'state') else None,
+                                    "state_of_incorporation": company.state_of_incorporation if hasattr(company, 'state_of_incorporation') else None,
+                                    "business_address": company.business_address if hasattr(company, 'business_address') else None,
+                                    "mailing_address": company.mailing_address if hasattr(company, 'mailing_address') else None,
+                                    "phone": company.phone if hasattr(company, 'phone') else None,
+                                    "website": company.website if hasattr(company, 'website') else None,
+                                    "fiscal_year_end": company.fiscal_year_end if hasattr(company, 'fiscal_year_end') else None,
+                                    "irs_number": company.irs_number if hasattr(company, 'irs_number') else None
                                 }
                                 self.neo4j_store.store_filing(filing, company_data)
                                 logger.info(f"Stored filing {filing.accession_number} in Neo4j")
