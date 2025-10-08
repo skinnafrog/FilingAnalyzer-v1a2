@@ -18,7 +18,7 @@ from ..config.settings import get_settings
 from ..knowledge.rag_pipeline import RAGPipeline
 from ..models.filing import SECFiling
 from ..database import init_db, get_db
-from ..database.models import Filing, Company, FilingDocument
+from ..database.models import Filing, Company, FilingDocument, FilingChunk
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -390,9 +390,14 @@ async def get_filing_stats(db: Session = Depends(get_db)):
     """
     try:
         from sqlalchemy import func
+        import os
+        import shutil
 
         total_filings = db.query(func.count(Filing.id)).scalar() or 0
         total_companies = db.query(func.count(Company.id)).scalar() or 0
+
+        # Get total chunks for RAG
+        total_chunks = db.query(func.count(FilingChunk.id)).scalar() or 0
 
         # Get filing type distribution
         filing_types = db.query(
@@ -410,11 +415,51 @@ async def get_filing_stats(db: Session = Depends(get_db)):
             func.count(Filing.status)
         ).group_by(Filing.status).all()
 
+        # Calculate storage usage
+        storage_info = {}
+
+        # Get filing storage size
+        filings_dir = os.path.join("data", "filings")
+        if os.path.exists(filings_dir):
+            total_size = 0
+            file_count = 0
+            for dirpath, dirnames, filenames in os.walk(filings_dir):
+                for f in filenames:
+                    fp = os.path.join(dirpath, f)
+                    if os.path.exists(fp):
+                        total_size += os.path.getsize(fp)
+                        file_count += 1
+
+            storage_info["filings_storage_mb"] = round(total_size / (1024 * 1024), 2)
+            storage_info["total_files"] = file_count
+        else:
+            storage_info["filings_storage_mb"] = 0
+            storage_info["total_files"] = 0
+
+        # Get disk usage for data directory
+        data_dir = "data"
+        if os.path.exists(data_dir):
+            disk_usage = shutil.disk_usage(data_dir)
+            storage_info["disk_total_gb"] = round(disk_usage.total / (1024**3), 2)
+            storage_info["disk_used_gb"] = round(disk_usage.used / (1024**3), 2)
+            storage_info["disk_free_gb"] = round(disk_usage.free / (1024**3), 2)
+            storage_info["disk_usage_percent"] = round((disk_usage.used / disk_usage.total) * 100, 1)
+
+        # Get filings processed today
+        from datetime import datetime, timedelta
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        filings_today = db.query(func.count(Filing.id)).filter(
+            Filing.created_at >= today_start
+        ).scalar() or 0
+
         return {
             "total_filings": total_filings,
             "total_companies": total_companies,
+            "total_chunks": total_chunks,
+            "filings_today": filings_today,
             "filing_types": {ft[0]: ft[1] for ft in filing_types if ft[0]},
             "status_distribution": {st[0]: st[1] for st in status_distribution if st[0]},
+            "storage": storage_info,
             "last_updated": last_updated
         }
 
