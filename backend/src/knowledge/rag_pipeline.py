@@ -709,7 +709,11 @@ class RAGPipeline:
                         query_obj = query_obj.filter(Filing.accession_number == filters["accession_number"])
 
                 # Search in chunk text and document content
-                if query:
+                # But skip text search if we have an accession_number filter
+                if filters and filters.get("accession_number"):
+                    logger.info("Using accession number filter for chunks, skipping text search")
+                    # Just use the accession filter, no text search needed
+                elif query:
                     search_pattern = f"%{query}%"
                     query_obj = query_obj.filter(
                         or_(
@@ -772,13 +776,16 @@ class RAGPipeline:
                         if filters.get("accession_number"):
                             doc_query = doc_query.filter(Filing.accession_number == filters["accession_number"])
 
-                    # If no specific query but filters exist, just filter by company/form
-                    # Otherwise apply text search
-                    if not query and filters:
+                    # If we have an accession_number filter, don't do text search
+                    # as we're looking for a specific filing
+                    if filters and filters.get("accession_number"):
+                        logger.info("Using accession number filter, skipping text search")
+                        # Just use the accession filter, no text search needed
+                    elif not query and filters:
                         logger.info("No query text, using filters only")
                         # Just filter by company/form, don't search text
                     elif query:
-                        # Only search text if there's an actual query
+                        # Only search text if there's an actual query and no accession filter
                         search_pattern = f"%{query}%"
                         logger.info(f"Searching documents for pattern: {search_pattern[:50]}...")
                         doc_query = doc_query.filter(

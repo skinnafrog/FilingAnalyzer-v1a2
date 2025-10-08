@@ -163,23 +163,26 @@ class FilingDownloader:
         # Priority order for downloads
         url_candidates = []
 
-        # First try the main filing URL
-        if filing.filing_url:
+        # ALWAYS try to resolve the actual document from the index first
+        # This applies to ALL form types, not just 10-K, 10-Q, 8-K
+        index_url = await self._resolve_index_document_url(filing)
+        if index_url:
+            logger.info(f"Resolved primary document URL from index: {index_url}")
+            url_candidates.append(index_url)
+
+        # Only use filing URL if it's not an index page
+        if filing.filing_url and 'index' not in str(filing.filing_url).lower():
             url_candidates.append(str(filing.filing_url))
 
-        # Then try HTML version if preferred
-        if prefer_html and filing.filing_html_url:
+        # Then try HTML version if preferred and not an index
+        if prefer_html and filing.filing_html_url and 'index' not in str(filing.filing_html_url).lower():
             url_candidates.append(str(filing.filing_html_url))
 
-        # Add document URLs
-        url_candidates.extend([str(url) for url in filing.document_urls])
-
-        # For specific form types, try to find the primary document
-        if filing.form_type in ["10-K", "10-Q", "8-K"]:
-            # Try to resolve the main document URL from index
-            index_url = await self._resolve_index_document_url(filing)
-            if index_url:
-                url_candidates.insert(0, index_url)
+        # Add document URLs that are not index pages
+        url_candidates.extend([
+            str(url) for url in filing.document_urls
+            if 'index' not in str(url).lower()
+        ])
 
         # Test URLs and return first valid one
         for url in url_candidates:
@@ -200,42 +203,123 @@ class FilingDownloader:
             Primary document URL or None
         """
         try:
-            # Build index URL
+            # Build index URL - try HTML first for parsing
             acc_no_dash = filing.accession_number.replace("-", "")
             cik_padded = filing.cik_number.zfill(10)
+
+            # First try JSON API
             index_url = (
                 f"https://www.sec.gov/Archives/edgar/data/"
                 f"{cik_padded}/{acc_no_dash}/{filing.accession_number}-index.json"
             )
 
-            # Download index JSON
             await self.rate_limiter.acquire()
-
             headers = {"User-Agent": self.user_agent}
 
             async with httpx.AsyncClient(
                 timeout=httpx.Timeout(30.0),
                 follow_redirects=True
             ) as client:
-                response = await client.get(index_url, headers=headers)
+                # Try JSON endpoint first
+                try:
+                    response = await client.get(index_url, headers=headers)
+                    if response.status_code == 200:
+                        index_data = response.json()
+                        # Find primary document
+                        for item in index_data.get("directory", {}).get("item", []):
+                            if item.get("type") in ["10-K", "10-Q", "8-K", filing.form_type]:
+                                doc_name = item.get("name")
+                                if doc_name:
+                                    return (
+                                        f"https://www.sec.gov/Archives/edgar/data/"
+                                        f"{cik_padded}/{acc_no_dash}/{doc_name}"
+                                    )
+                except:
+                    pass  # Fall through to HTML parsing
 
+                # Fall back to HTML parsing
+                html_index_url = (
+                    f"https://www.sec.gov/Archives/edgar/data/"
+                    f"{cik_padded}/{acc_no_dash}/{filing.accession_number}-index.html"
+                )
+
+                response = await client.get(html_index_url, headers=headers)
                 if response.status_code == 200:
-                    index_data = response.json()
-
-                    # Find primary document
-                    for item in index_data.get("directory", {}).get("item", []):
-                        if item.get("type") in ["10-K", "10-Q", "8-K", filing.form_type]:
-                            doc_name = item.get("name")
-                            if doc_name:
-                                return (
-                                    f"https://www.sec.gov/Archives/edgar/data/"
-                                    f"{cik_padded}/{acc_no_dash}/{doc_name}"
-                                )
+                    # Parse the HTML to find actual document links
+                    html_content = response.text
+                    document_urls = await self._parse_edgar_index_html(html_content, filing)
+                    if document_urls:
+                        return document_urls[0]  # Return the primary document
 
         except Exception as e:
             logger.debug(f"Could not resolve index document: {e}")
 
         return None
+
+    async def _parse_edgar_index_html(self, html_content: str, filing: SECFiling) -> List[str]:
+        """
+        Parse EDGAR index HTML to extract actual document URLs.
+
+        Args:
+            html_content: HTML content of the index page
+            filing: SECFiling object
+
+        Returns:
+            List of document URLs
+        """
+        document_urls = []
+
+        try:
+            # Import BeautifulSoup for HTML parsing
+            from bs4 import BeautifulSoup
+
+            soup = BeautifulSoup(html_content, 'html.parser')
+
+            # Find the document table
+            tables = soup.find_all('table', {'class': 'tableFile'})
+
+            for table in tables:
+                rows = table.find_all('tr')
+                for row in rows:
+                    cells = row.find_all('td')
+                    if len(cells) >= 3:
+                        # Check if this is a document row
+                        type_cell = cells[2] if len(cells) > 2 else None
+                        doc_link = row.find('a', href=True)
+
+                        if doc_link and type_cell:
+                            doc_type = type_cell.get_text(strip=True)
+                            # Look for the primary document (not exhibits or graphics)
+                            if doc_type == filing.form_type or doc_type in ['4', '10-K', '10-Q', '8-K', 'DEF 14A', 'DEFA14A']:
+                                href = doc_link['href']
+                                # Convert relative URL to absolute
+                                if href.startswith('/'):
+                                    doc_url = f"https://www.sec.gov{href}"
+                                else:
+                                    # Build absolute URL
+                                    acc_no_dash = filing.accession_number.replace("-", "")
+                                    cik_padded = filing.cik_number.zfill(10)
+                                    doc_url = (
+                                        f"https://www.sec.gov/Archives/edgar/data/"
+                                        f"{cik_padded}/{acc_no_dash}/{href}"
+                                    )
+                                document_urls.append(doc_url)
+                                logger.debug(f"Found document URL: {doc_url}")
+
+            # If no specific document found, look for any .htm or .html files
+            if not document_urls:
+                for link in soup.find_all('a', href=True):
+                    href = link['href']
+                    if ('.htm' in href or '.xml' in href) and 'index' not in href.lower():
+                        if href.startswith('/Archives/'):
+                            doc_url = f"https://www.sec.gov{href}"
+                            document_urls.append(doc_url)
+                            logger.debug(f"Found fallback document URL: {doc_url}")
+
+        except Exception as e:
+            logger.error(f"Error parsing EDGAR index HTML: {e}")
+
+        return document_urls
 
     async def _test_url(self, url: str) -> bool:
         """
