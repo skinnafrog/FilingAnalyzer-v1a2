@@ -18,6 +18,11 @@ from openai import AsyncOpenAI
 import numpy as np
 
 from ..config.settings import Settings, get_settings
+from ..config.prompts import (
+    get_system_prompt,
+    format_context_for_llm,
+    format_user_query
+)
 from ..models.filing import SECFiling, ProcessingStage
 from .vector_store import VectorStore
 
@@ -953,22 +958,20 @@ class RAGPipeline:
             Generated response
         """
         try:
-            # Build context string from retrieved documents
-            context_str = "\n\n".join([
-                f"[Source: {doc.get('company_name', 'Unknown')} - {doc.get('form_type', 'Unknown')} - Accession: {doc.get('accession_number', 'Unknown')}]\n{doc.get('text', '')}"
-                for doc in context[:3]  # Use top 3 documents
-            ])
+            # Format context using our prompt utilities
+            context_str = format_context_for_llm(context, max_docs=5)
+
+            # Determine appropriate prompt type based on context
+            if not context or len(context) == 0:
+                prompt_type = "no_context"
+            else:
+                prompt_type = "analysis"
 
             # Build messages for OpenAI
             messages = [
                 {
                     "role": "system",
-                    "content": """You are a financial analyst AI assistant specializing in SEC filings.
-                    Answer questions based on the provided SEC filing context.
-                    Be precise and cite specific information from the filings.
-                    When asked about a specific accession number, focus on the filing with that accession number.
-                    Always mention the accession number when discussing specific filings.
-                    If the context doesn't contain information about the requested filing, clearly state that."""
+                    "content": get_system_prompt(prompt_type=prompt_type)
                 }
             ]
 
@@ -980,10 +983,19 @@ class RAGPipeline:
                         "content": msg.content
                     })
 
+            # Extract metadata about specific filing if mentioned in query
+            query_metadata = {}
+            # Check if query contains an accession number
+            import re
+            accession_pattern = r'\d{10}-\d{2}-\d{6}'
+            accession_match = re.search(accession_pattern, query)
+            if accession_match:
+                query_metadata['accession_number'] = accession_match.group()
+
             # Add current query with context
             messages.append({
                 "role": "user",
-                "content": f"Context from SEC filings:\n{context_str}\n\nQuestion: {query}"
+                "content": format_user_query(query, context_str, query_metadata)
             })
 
             # Generate response
@@ -1018,22 +1030,17 @@ class RAGPipeline:
             Response chunks
         """
         try:
-            # Build context string from retrieved documents
-            context_str = "\n\n".join([
-                f"[Source: {doc.get('company_name', 'Unknown')} - {doc.get('form_type', 'Unknown')}]\n{doc.get('text', '')}"
-                for doc in context[:3]
-            ])
+            # Format context using our prompt utilities
+            context_str = format_context_for_llm(context, max_docs=5)
+
+            # Use streaming prompt type
+            prompt_type = "streaming" if context and len(context) > 0 else "no_context"
 
             # Build messages for OpenAI
             messages = [
                 {
                     "role": "system",
-                    "content": """You are a financial analyst AI assistant specializing in SEC filings.
-                    Answer questions based on the provided SEC filing context.
-                    Be precise and cite specific information from the filings.
-                    When asked about a specific accession number, focus on the filing with that accession number.
-                    Always mention the accession number when discussing specific filings.
-                    If the context doesn't contain information about the requested filing, clearly state that."""
+                    "content": get_system_prompt(prompt_type=prompt_type)
                 }
             ]
 
@@ -1045,10 +1052,18 @@ class RAGPipeline:
                         "content": msg.content if hasattr(msg, 'content') else str(msg)
                     })
 
+            # Extract metadata about specific filing if mentioned in query
+            query_metadata = {}
+            import re
+            accession_pattern = r'\d{10}-\d{2}-\d{6}'
+            accession_match = re.search(accession_pattern, query)
+            if accession_match:
+                query_metadata['accession_number'] = accession_match.group()
+
             # Add current query with context
             messages.append({
                 "role": "user",
-                "content": f"Context from SEC filings:\n{context_str}\n\nQuestion: {query}"
+                "content": format_user_query(query, context_str, query_metadata)
             })
 
             # Generate streaming response
