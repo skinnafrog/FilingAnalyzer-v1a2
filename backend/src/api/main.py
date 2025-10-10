@@ -434,7 +434,7 @@ async def get_filings(
     """
     try:
         # Build query
-        query = db.query(Filing).join(Company)
+        query = db.query(Filing).join(Company, Filing.company_id == Company.id)
 
         # Apply filters
         if company:
