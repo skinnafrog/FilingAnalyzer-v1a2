@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Financial Intelligence Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .message-container {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .source-card {
+            transition: all 0.2s ease;
+        }
+        .source-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .loading-dots {
+            animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <!-- Header -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">Financial Intelligence Platform</h1>
+            <p class="text-gray-600">AI-powered SEC filing analysis and insights</p>
+            <div id="connection-status" class="mt-2 text-sm">
+                <span class="inline-block w-2 h-2 bg-yellow-400 rounded-full mr-2"></span>
+                <span id="status-text">Connecting to server...</span>
+            </div>
+
+            <!-- Navigation Tabs -->
+            <div class="flex space-x-2 mt-6 border-b">
+                <a href="index.html" class="px-4 py-2 text-blue-600 border-b-2 border-blue-600">
+                    Chat
+                </a>
+                <a href="filings.html" class="px-4 py-2 text-gray-700 hover:text-blue-600 border-b-2 border-transparent hover:border-blue-600 transition-colors">
+                    Filings Explorer
+                </a>
+                <a href="#" class="px-4 py-2 text-gray-700 hover:text-blue-600 border-b-2 border-transparent hover:border-blue-600 transition-colors">
+                    Watchlist
+                </a>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Chat Interface -->
+            <div class="lg:col-span-2">
+                <div class="bg-white rounded-lg shadow-md">
+                    <!-- Chat Header -->
+                    <div class="border-b border-gray-200 p-4">
+                        <h2 class="text-xl font-semibold text-gray-800">Chat with SEC Filings</h2>
+                        <p class="text-sm text-gray-600 mt-1">Ask questions about company financials and filings</p>
+                    </div>
+
+                    <!-- Messages Container -->
+                    <div id="messages" class="message-container p-4 space-y-4 min-h-[400px]">
+                        <div class="text-center text-gray-500 py-8">
+                            <svg class="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
+                            </svg>
+                            <p>Start a conversation by asking about SEC filings</p>
+                            <p class="text-sm mt-2">Example: "What are Apple's latest revenue figures?"</p>
+                        </div>
+                    </div>
+
+                    <!-- Input Area -->
+                    <div class="border-t border-gray-200 p-4">
+                        <div class="flex space-x-2">
+                            <input
+                                id="chat-input"
+                                type="text"
+                                placeholder="Ask about SEC filings..."
+                                class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                onkeypress="if(event.key==='Enter') sendMessage()"
+                            >
+                            <button
+                                onclick="sendMessage()"
+                                class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                            >
+                                Send
+                            </button>
+                        </div>
+                        <div class="mt-2 flex items-center space-x-4 text-sm text-gray-600">
+                            <label class="flex items-center">
+                                <input type="checkbox" id="streaming" class="mr-2" checked>
+                                Stream responses
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sources Panel -->
+            <div class="lg:col-span-1">
+                <div class="bg-white rounded-lg shadow-md">
+                    <div class="border-b border-gray-200 p-4">
+                        <h2 class="text-xl font-semibold text-gray-800">Sources</h2>
+                        <p class="text-sm text-gray-600 mt-1">Referenced SEC filings</p>
+                    </div>
+                    <div id="sources" class="p-4 space-y-3 max-h-[600px] overflow-y-auto">
+                        <div class="text-center text-gray-500 py-8">
+                            <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            <p class="text-sm">Sources will appear here</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Filings -->
+                <div class="bg-white rounded-lg shadow-md mt-6">
+                    <div class="border-b border-gray-200 p-4">
+                        <h3 class="text-lg font-semibold text-gray-800">Recent Filings</h3>
+                    </div>
+                    <div class="p-4">
+                        <div id="filings-list" class="space-y-2 max-h-64 overflow-y-auto">
+                            <p class="text-sm text-gray-500">Loading filings...</p>
+                        </div>
+                        <button onclick="loadFilings()" class="mt-3 text-sm text-indigo-600 hover:text-indigo-500">
+                            Refresh Filings
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Ingestion Control -->
+                <div class="bg-white rounded-lg shadow-md mt-6">
+                    <div class="border-b border-gray-200 p-4">
+                        <h3 class="text-lg font-semibold text-gray-800">Ingestion Control</h3>
+                    </div>
+                    <div class="p-4">
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm text-gray-600">Status:</span>
+                                <span id="ingestion-status" class="text-sm font-medium">
+                                    <span class="inline-block w-2 h-2 bg-gray-400 rounded-full mr-1"></span>
+                                    Unknown
+                                </span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm text-gray-600">Market Hours:</span>
+                                <span id="market-hours" class="text-sm font-medium">-</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm text-gray-600">Auto-Ingest:</span>
+                                <span id="auto-ingest" class="text-sm font-medium">-</span>
+                            </div>
+                            <div class="border-t pt-3">
+                                <div class="flex items-center space-x-2 mb-2">
+                                    <input
+                                        type="number"
+                                        id="ingest-limit"
+                                        min="1"
+                                        max="50"
+                                        value="5"
+                                        class="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+                                    >
+                                    <span class="text-sm text-gray-600">filings</span>
+                                </div>
+                                <button
+                                    onclick="triggerIngestion()"
+                                    id="ingest-button"
+                                    class="w-full px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors text-sm"
+                                >
+                                    Manual Ingest
+                                </button>
+                                <div id="ingest-message" class="mt-2 text-sm text-gray-600 hidden"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Statistics -->
+                <div class="bg-white rounded-lg shadow-md mt-6">
+                    <div class="p-4">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-3">Statistics</h3>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Total Filings:</span>
+                                <span id="stat-filings" class="font-medium">-</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Companies:</span>
+                                <span id="stat-companies" class="font-medium">-</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">RAG Chunks:</span>
+                                <span id="stat-chunks" class="font-medium">-</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Today's Filings:</span>
+                                <span id="stat-today" class="font-medium">-</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Storage Used:</span>
+                                <span id="stat-storage" class="font-medium">-</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Disk Usage:</span>
+                                <span id="stat-disk" class="font-medium">-</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Updated:</span>
+                                <span id="stat-updated" class="font-medium text-xs">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // API URL - Backend runs on port 8000
+        const API_URL = 'http://localhost:8000';
+        let sessionId = null;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            checkConnection();
+            checkIngestionStatus();
+            loadFilings();
+            loadStatistics();
+            setInterval(checkConnection, 30000); // Check every 30 seconds
+            setInterval(checkIngestionStatus, 60000); // Check every minute
+            setInterval(loadFilings, 60000); // Refresh filings every minute
+            setInterval(loadStatistics, 30000); // Refresh statistics every 30 seconds
+
+            // Check if we have an analyze parameter from the filings page
+            const urlParams = new URLSearchParams(window.location.search);
+            const analyzeParam = urlParams.get('analyze');
+            if (analyzeParam) {
+                // Pre-fill the chat input with an analysis query
+                const input = document.getElementById('chat-input');
+                input.value = `Analyze the SEC filing with accession number ${analyzeParam}. Provide a summary of key financial metrics and important disclosures.`;
+                // Optionally auto-send the message
+                setTimeout(() => {
+                    addMessage('system', `Loading filing ${analyzeParam} for analysis...`);
+                    sendMessage();
+                }, 500);
+            }
+        });
+
+        async function checkConnection() {
+            try {
+                const response = await fetch(`${API_URL}/health`);
+                if (response.ok) {
+                    updateConnectionStatus(true);
+                } else {
+                    updateConnectionStatus(false);
+                }
+            } catch (error) {
+                updateConnectionStatus(false);
+            }
+        }
+
+        function updateConnectionStatus(isConnected) {
+            const statusElement = document.getElementById('connection-status');
+            const statusText = document.getElementById('status-text');
+
+            if (isConnected) {
+                statusElement.innerHTML = '<span class="inline-block w-2 h-2 bg-green-400 rounded-full mr-2"></span>';
+                statusElement.innerHTML += '<span id="status-text">Connected</span>';
+            } else {
+                statusElement.innerHTML = '<span class="inline-block w-2 h-2 bg-red-400 rounded-full mr-2"></span>';
+                statusElement.innerHTML += '<span id="status-text">Disconnected</span>';
+            }
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('chat-input');
+            const query = input.value.trim();
+
+            if (!query) return;
+
+            // Add user message to chat
+            addMessage('user', query);
+            input.value = '';
+
+            // Show loading indicator
+            const loadingId = addMessage('assistant', '<span class="loading-dots">Thinking...</span>', true);
+
+            const isStreaming = document.getElementById('streaming').checked;
+
+            try {
+                if (isStreaming) {
+                    await sendStreamingMessage(query, loadingId);
+                } else {
+                    await sendStandardMessage(query, loadingId);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                updateMessage(loadingId, 'Sorry, I encountered an error. Please try again.');
+            }
+        }
+
+        async function sendStandardMessage(query, loadingId) {
+            // Check if the query contains an accession number
+            const accessionPattern = /\b(\d{10}-\d{2}-\d{6})\b/;
+            const match = query.match(accessionPattern);
+
+            const requestBody = {
+                query: query,
+                session_id: sessionId,
+                stream: false
+            };
+
+            // If accession number found, add it as a filter
+            if (match) {
+                requestBody.filters = {
+                    accession_number: match[1]
+                };
+                console.log('Detected accession number:', match[1]);
+            }
+
+            const response = await fetch(`${API_URL}/api/chat`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to get response');
+            }
+
+            const data = await response.json();
+            sessionId = data.session_id;
+
+            // Update message
+            updateMessage(loadingId, data.response);
+
+            // Update sources
+            if (data.sources && data.sources.length > 0) {
+                updateSources(data.sources);
+            }
+        }
+
+        async function sendStreamingMessage(query, loadingId) {
+            // Check if the query contains an accession number
+            const accessionPattern = /\b(\d{10}-\d{2}-\d{6})\b/;
+            const match = query.match(accessionPattern);
+
+            const requestBody = {
+                query: query,
+                session_id: sessionId,
+                stream: true
+            };
+
+            // If accession number found, add it as a filter
+            if (match) {
+                requestBody.filters = {
+                    accession_number: match[1]
+                };
+                console.log('Detected accession number:', match[1]);
+            }
+
+            const response = await fetch(`${API_URL}/api/chat/stream`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to get response');
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let responseText = '';
+            let firstChunk = true;
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value);
+                const lines = chunk.split('\n');
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.slice(6));
+
+                            if (data.type === 'start') {
+                                sessionId = data.session_id;
+                            } else if (data.type === 'sources') {
+                                updateSources(data.sources);
+                            } else if (data.type === 'content') {
+                                if (firstChunk) {
+                                    responseText = data.content;
+                                    updateMessage(loadingId, responseText);
+                                    firstChunk = false;
+                                } else {
+                                    responseText += data.content;
+                                    updateMessage(loadingId, responseText);
+                                }
+                            }
+                        } catch (e) {
+                            console.error('Error parsing SSE data:', e);
+                        }
+                    }
+                }
+            }
+        }
+
+        function addMessage(role, content, isHtml = false) {
+            const messagesContainer = document.getElementById('messages');
+            const messageId = 'msg-' + Date.now();
+
+            const messageDiv = document.createElement('div');
+            messageDiv.id = messageId;
+            messageDiv.className = `flex ${role === 'user' ? 'justify-end' : 'justify-start'}`;
+
+            const bubble = document.createElement('div');
+            bubble.className = `max-w-xl px-4 py-3 rounded-lg ${
+                role === 'user'
+                ? 'bg-blue-500 text-white'
+                : 'bg-gray-200 text-gray-800'
+            }`;
+
+            if (isHtml) {
+                bubble.innerHTML = content;
+            } else {
+                bubble.textContent = content;
+            }
+
+            messageDiv.appendChild(bubble);
+            messagesContainer.appendChild(messageDiv);
+
+            // Scroll to bottom
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+            return messageId;
+        }
+
+        function updateMessage(messageId, content) {
+            const messageElement = document.getElementById(messageId);
+            if (messageElement) {
+                const bubble = messageElement.querySelector('div');
+                bubble.textContent = content;
+            }
+        }
+
+        function updateSources(sources) {
+            const sourcesContainer = document.getElementById('sources');
+            sourcesContainer.innerHTML = '';
+
+            sources.forEach(source => {
+                const sourceCard = document.createElement('div');
+                sourceCard.className = 'source-card bg-gray-50 rounded-lg p-3 cursor-pointer hover:bg-gray-100';
+
+                sourceCard.innerHTML = `
+                    <div class="font-medium text-sm text-gray-800">${source.company_name || 'Unknown Company'}</div>
+                    <div class="text-xs text-gray-600 mt-1">${source.form_type || 'Unknown Form'}</div>
+                    <div class="text-xs text-gray-500 mt-2 line-clamp-2">${source.excerpt || ''}</div>
+                `;
+
+                sourcesContainer.appendChild(sourceCard);
+            });
+        }
+
+        // Load and display filings
+        async function loadFilings() {
+            try {
+                const response = await fetch(`${API_URL}/api/filings?limit=10`);
+                const filingsDiv = document.getElementById('filings-list');
+
+                if (response.ok) {
+                    const filings = await response.json();
+
+                    if (filings.length === 0) {
+                        filingsDiv.innerHTML = '<p class="text-sm text-gray-500">No filings found. Wait for automatic ingestion or trigger manual ingestion.</p>';
+                    } else {
+                        filingsDiv.innerHTML = filings.map(filing => `
+                            <div class="border-b border-gray-100 pb-2">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <p class="text-sm font-medium text-gray-800">${filing.company_name}</p>
+                                        <p class="text-xs text-gray-600">${filing.form_type} - ${new Date(filing.filing_date).toLocaleDateString()}</p>
+                                        <p class="text-xs text-gray-500">${filing.accession_number}</p>
+                                    </div>
+                                    <span class="text-xs px-2 py-1 rounded-full ${
+                                        filing.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                        filing.status === 'processing' ? 'bg-yellow-100 text-yellow-800' :
+                                        'bg-gray-100 text-gray-800'
+                                    }">
+                                        ${filing.status}
+                                    </span>
+                                </div>
+                            </div>
+                        `).join('');
+                    }
+                } else {
+                    filingsDiv.innerHTML = '<p class="text-sm text-red-600">Failed to load filings</p>';
+                }
+            } catch (error) {
+                console.error('Error loading filings:', error);
+                document.getElementById('filings-list').innerHTML = '<p class="text-sm text-red-600">Error loading filings</p>';
+            }
+        }
+
+        // Load and display statistics
+        async function loadStatistics() {
+            try {
+                const response = await fetch(`${API_URL}/api/filings/stats`);
+                if (response.ok) {
+                    const stats = await response.json();
+
+                    // Update basic statistics
+                    document.getElementById('stat-filings').textContent = stats.total_filings || '0';
+                    document.getElementById('stat-companies').textContent = stats.total_companies || '0';
+                    document.getElementById('stat-chunks').textContent = stats.total_chunks || '0';
+                    document.getElementById('stat-today').textContent = stats.filings_today || '0';
+
+                    // Update storage information
+                    if (stats.storage) {
+                        const storageMB = stats.storage.filings_storage_mb || 0;
+                        const files = stats.storage.total_files || 0;
+                        document.getElementById('stat-storage').textContent =
+                            `${storageMB} MB (${files} files)`;
+
+                        if (stats.storage.disk_usage_percent !== undefined) {
+                            const usedGB = stats.storage.disk_used_gb || 0;
+                            const totalGB = stats.storage.disk_total_gb || 0;
+                            const percent = stats.storage.disk_usage_percent || 0;
+                            document.getElementById('stat-disk').textContent =
+                                `${usedGB}/${totalGB} GB (${percent}%)`;
+                        } else {
+                            document.getElementById('stat-disk').textContent = 'N/A';
+                        }
+                    } else {
+                        document.getElementById('stat-storage').textContent = 'N/A';
+                        document.getElementById('stat-disk').textContent = 'N/A';
+                    }
+
+                    // Update last updated time
+                    if (stats.last_updated) {
+                        // Ensure the timestamp is treated as UTC
+                        const utcDate = stats.last_updated.includes('Z') ?
+                            stats.last_updated : stats.last_updated + 'Z';
+                        const date = new Date(utcDate);
+
+                        // Format: MMM DD, YYYY HH:MM:SS TZ
+                        const dateStr = date.toLocaleDateString('en-US', {
+                            month: 'short',  // Jan, Feb, Mar, etc.
+                            day: '2-digit',
+                            year: 'numeric'
+                        });
+                        const timeStr = date.toLocaleTimeString('en-US', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                            timeZoneName: 'short'
+                        });
+                        document.getElementById('stat-updated').textContent = `${dateStr} ${timeStr}`;
+                    } else {
+                        document.getElementById('stat-updated').textContent = 'Never';
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading statistics:', error);
+                // Set all stats to error state
+                document.getElementById('stat-filings').textContent = 'Error';
+                document.getElementById('stat-companies').textContent = 'Error';
+                document.getElementById('stat-chunks').textContent = 'Error';
+                document.getElementById('stat-today').textContent = 'Error';
+                document.getElementById('stat-storage').textContent = 'Error';
+                document.getElementById('stat-disk').textContent = 'Error';
+                document.getElementById('stat-updated').textContent = 'Error';
+            }
+        }
+
+        // Ingestion Control Functions
+        async function checkIngestionStatus() {
+            try {
+                const response = await fetch(`${API_URL}/api/ingestion/status`);
+                if (response.ok) {
+                    const data = await response.json();
+                    updateIngestionStatus(data);
+                }
+            } catch (error) {
+                console.error('Error checking ingestion status:', error);
+            }
+        }
+
+        function updateIngestionStatus(data) {
+            // Update status indicator
+            const statusElement = document.getElementById('ingestion-status');
+            const pipelineStatus = data.pipeline_status?.status || 'unknown';
+
+            if (pipelineStatus === 'operational') {
+                statusElement.innerHTML = '<span class="inline-block w-2 h-2 bg-green-400 rounded-full mr-1"></span>Operational';
+            } else if (pipelineStatus === 'error') {
+                statusElement.innerHTML = '<span class="inline-block w-2 h-2 bg-red-400 rounded-full mr-1"></span>Error';
+            } else {
+                statusElement.innerHTML = '<span class="inline-block w-2 h-2 bg-gray-400 rounded-full mr-1"></span>Unknown';
+            }
+
+            // Update market hours
+            const marketElement = document.getElementById('market-hours');
+            if (data.market_hours) {
+                marketElement.innerHTML = '<span class="text-green-600">Open</span>';
+            } else {
+                marketElement.innerHTML = '<span class="text-gray-600">Closed</span>';
+            }
+
+            // Update auto-ingest status
+            const autoElement = document.getElementById('auto-ingest');
+            if (data.automatic_ingestion) {
+                autoElement.innerHTML = '<span class="text-green-600">Enabled</span>';
+            } else {
+                autoElement.innerHTML = '<span class="text-orange-600">Disabled</span>';
+            }
+        }
+
+        async function triggerIngestion() {
+            const button = document.getElementById('ingest-button');
+            const messageDiv = document.getElementById('ingest-message');
+            const limit = document.getElementById('ingest-limit').value;
+
+            // Disable button during processing
+            button.disabled = true;
+            button.textContent = 'Triggering...';
+            messageDiv.classList.add('hidden');
+
+            try {
+                const response = await fetch(`${API_URL}/api/ingestion/trigger?limit=${limit}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    messageDiv.textContent = `Ingestion triggered successfully (Task ID: ${data.task_id?.substring(0, 8)}...)`;
+                    messageDiv.className = 'mt-2 text-sm text-green-600';
+                    messageDiv.classList.remove('hidden');
+
+                    // Refresh status after a moment
+                    setTimeout(checkIngestionStatus, 2000);
+                } else {
+                    const error = await response.json();
+                    messageDiv.textContent = `Error: ${error.detail || 'Failed to trigger ingestion'}`;
+                    messageDiv.className = 'mt-2 text-sm text-red-600';
+                    messageDiv.classList.remove('hidden');
+                }
+            } catch (error) {
+                messageDiv.textContent = 'Failed to trigger ingestion';
+                messageDiv.className = 'mt-2 text-sm text-red-600';
+                messageDiv.classList.remove('hidden');
+                console.error('Error triggering ingestion:', error);
+            } finally {
+                // Re-enable button
+                button.disabled = false;
+                button.textContent = 'Manual Ingest';
+            }
+        }
+    </script>
+</body>
+</html>

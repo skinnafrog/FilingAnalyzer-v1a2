@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SEC Filings Explorer - Financial Intelligence Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .tab-active {
+            background-color: rgb(59 130 246);
+            color: white;
+        }
+        .filing-row:hover {
+            background-color: rgb(249 250 251);
+            cursor: pointer;
+        }
+        .detail-modal {
+            display: none;
+        }
+        .detail-modal.show {
+            display: flex;
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        .slide-in {
+            animation: slideIn 0.3s ease-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <!-- Header -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">Financial Intelligence Platform</h1>
+            <p class="text-gray-600">SEC Filings Explorer & Analysis</p>
+
+            <!-- Navigation Tabs -->
+            <div class="flex space-x-2 mt-6 border-b">
+                <a href="index.html" class="px-4 py-2 text-gray-700 hover:text-blue-600 border-b-2 border-transparent hover:border-blue-600 transition-colors">
+                    Chat
+                </a>
+                <a href="filings.html" class="px-4 py-2 text-blue-600 border-b-2 border-blue-600">
+                    Filings Explorer
+                </a>
+                <a href="#" class="px-4 py-2 text-gray-700 hover:text-blue-600 border-b-2 border-transparent hover:border-blue-600 transition-colors">
+                    Watchlist
+                </a>
+            </div>
+        </div>
+
+        <!-- Filings Explorer Content -->
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <!-- Filters Panel -->
+            <div class="lg:col-span-1">
+                <div class="bg-white rounded-lg shadow-md p-4">
+                    <h2 class="text-lg font-semibold text-gray-800 mb-4">Filters</h2>
+
+                    <!-- Search -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Company Search</label>
+                        <input
+                            id="company-search"
+                            type="text"
+                            placeholder="Company name..."
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            onkeyup="debounceSearch()"
+                        >
+                    </div>
+
+                    <!-- Form Type Filter -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Form Type</label>
+                        <select id="form-type-filter" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" onchange="applyFilters()">
+                            <option value="">All Types</option>
+                            <option value="10-K">10-K (Annual)</option>
+                            <option value="10-Q">10-Q (Quarterly)</option>
+                            <option value="8-K">8-K (Current)</option>
+                            <option value="DEF 14A">DEF 14A (Proxy)</option>
+                            <option value="S-1">S-1 (Registration)</option>
+                            <option value="424B">424B (Prospectus)</option>
+                            <option value="SC 13">SC 13D/G (Holdings)</option>
+                            <option value="13F-HR">13F-HR (Holdings)</option>
+                            <option value="4">Form 4 (Insider)</option>
+                        </select>
+                    </div>
+
+                    <!-- Status Filter -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Processing Status</label>
+                        <select id="status-filter" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" onchange="applyFilters()">
+                            <option value="">All Status</option>
+                            <option value="completed">Completed</option>
+                            <option value="processing">Processing</option>
+                            <option value="queued">Queued</option>
+                            <option value="failed">Failed</option>
+                            <option value="discovered">Discovered</option>
+                        </select>
+                    </div>
+
+                    <!-- Date Range -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Date Range</label>
+                        <input
+                            id="start-date"
+                            type="date"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
+                            onchange="applyFilters()"
+                        >
+                        <input
+                            id="end-date"
+                            type="date"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            onchange="applyFilters()"
+                        >
+                    </div>
+
+                    <!-- Clear Filters -->
+                    <button onclick="clearFilters()" class="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors">
+                        Clear Filters
+                    </button>
+                </div>
+
+                <!-- Statistics Panel -->
+                <div class="bg-white rounded-lg shadow-md p-4 mt-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-3">Statistics</h3>
+                    <div id="filing-stats" class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Total Filings:</span>
+                            <span id="stat-total-filings" class="font-medium">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Companies:</span>
+                            <span id="stat-total-companies" class="font-medium">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Completed:</span>
+                            <span id="stat-completed" class="font-medium text-green-600">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Processing:</span>
+                            <span id="stat-processing" class="font-medium text-yellow-600">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Failed:</span>
+                            <span id="stat-failed" class="font-medium text-red-600">-</span>
+                        </div>
+                    </div>
+                    <div class="mt-3 pt-3 border-t">
+                        <p class="text-xs text-gray-500">Last Updated: <span id="last-updated">-</span></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filings Table -->
+            <div class="lg:col-span-3">
+                <div class="bg-white rounded-lg shadow-md">
+                    <div class="p-4 border-b border-gray-200 flex justify-between items-center">
+                        <h2 class="text-xl font-semibold text-gray-800">SEC Filings</h2>
+                        <div class="flex items-center space-x-2">
+                            <span class="text-sm text-gray-600">Showing <span id="showing-count">0</span> filings</span>
+                            <button onclick="refreshFilings()" class="px-3 py-1 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors">
+                                Refresh
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Table -->
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead class="bg-gray-50 border-b border-gray-200">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Form Type</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Filing Date</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Period</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="filings-tbody" class="bg-white divide-y divide-gray-200">
+                                <tr>
+                                    <td colspan="7" class="px-4 py-8 text-center text-gray-500">
+                                        Loading filings...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination -->
+                    <div class="p-4 border-t border-gray-200 flex justify-between items-center">
+                        <div class="flex items-center space-x-2">
+                            <button id="prev-page" onclick="previousPage()" class="px-3 py-1 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50" disabled>
+                                Previous
+                            </button>
+                            <span class="text-sm text-gray-600">Page <span id="current-page">1</span></span>
+                            <button id="next-page" onclick="nextPage()" class="px-3 py-1 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300 transition-colors">
+                                Next
+                            </button>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <label class="text-sm text-gray-600">Items per page:</label>
+                            <select id="items-per-page" class="px-2 py-1 border border-gray-300 rounded text-sm" onchange="changeItemsPerPage()">
+                                <option value="10">10</option>
+                                <option value="20" selected>20</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filing Detail Modal -->
+        <div id="filing-detail-modal" class="detail-modal fixed inset-0 bg-black bg-opacity-50 z-50 items-center justify-center">
+            <div class="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden slide-in">
+                <div class="p-6 border-b border-gray-200 flex justify-between items-center">
+                    <h3 class="text-2xl font-semibold text-gray-800">Filing Details</h3>
+                    <button onclick="closeDetailModal()" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div id="filing-detail-content" class="p-6 overflow-y-auto" style="max-height: calc(90vh - 100px);">
+                    <!-- Content will be dynamically inserted here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // API URL - Backend runs on port 8000
+        const API_URL = 'http://localhost:8000';
+        let currentPage = 0;
+        let itemsPerPage = 20;
+        let searchTimeout = null;
+        let currentFilters = {};
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadFilings();
+            loadStats();
+            setInterval(loadStats, 60000); // Refresh stats every minute
+        });
+
+        async function loadFilings() {
+            try {
+                const params = new URLSearchParams({
+                    limit: itemsPerPage,
+                    offset: currentPage * itemsPerPage,
+                    ...currentFilters
+                });
+
+                const response = await fetch(`${API_URL}/api/filings?${params}`);
+                if (!response.ok) throw new Error('Failed to load filings');
+
+                const filings = await response.json();
+                displayFilings(filings);
+
+            } catch (error) {
+                console.error('Error loading filings:', error);
+                document.getElementById('filings-tbody').innerHTML = `
+                    <tr>
+                        <td colspan="7" class="px-4 py-8 text-center text-red-600">
+                            Failed to load filings. Please check the server connection.
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+
+        function displayFilings(filings) {
+            const tbody = document.getElementById('filings-tbody');
+            document.getElementById('showing-count').textContent = filings.length;
+
+            if (filings.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="px-4 py-8 text-center text-gray-500">
+                            No filings found matching your criteria.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = filings.map(filing => `
+                <tr class="filing-row hover:bg-gray-50" onclick="showFilingDetail('${filing.accession_number}')">
+                    <td class="px-4 py-3">
+                        <div>
+                            <div class="text-sm font-medium text-gray-900">${filing.company_name}</div>
+                            <div class="text-xs text-gray-500">
+                                ${filing.ticker_symbol ? `${filing.ticker_symbol} | ` : ''}
+                                CIK: ${filing.cik_number || 'N/A'}
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-4 py-3">
+                        <span class="px-2 py-1 text-xs rounded-full ${getFormTypeColor(filing.form_type)}">
+                            ${filing.form_type}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-sm text-gray-900">
+                        ${new Date(filing.filing_date).toLocaleDateString()}
+                    </td>
+                    <td class="px-4 py-3 text-sm text-gray-500">
+                        ${filing.period_date ? new Date(filing.period_date).toLocaleDateString() : '-'}
+                    </td>
+                    <td class="px-4 py-3">
+                        <span class="px-2 py-1 text-xs rounded-full ${getStatusColor(filing.status)}">
+                            ${filing.status}
+                        </span>
+                        ${filing.processing_stage ? `<div class="text-xs text-gray-500 mt-1">${filing.processing_stage}</div>` : ''}
+                    </td>
+                    <td class="px-4 py-3 text-sm text-gray-500">
+                        ${filing.file_size_mb ? `${filing.file_size_mb.toFixed(2)} MB` : '-'}
+                        ${filing.chunk_count ? `<div class="text-xs">${filing.chunk_count} chunks</div>` : ''}
+                    </td>
+                    <td class="px-4 py-3">
+                        <div class="flex space-x-2">
+                            <button onclick="event.stopPropagation(); viewFiling('${filing.cik_number}', '${filing.accession_number}')" class="text-blue-600 hover:text-blue-800 text-sm">
+                                View
+                            </button>
+                            <button onclick="event.stopPropagation(); analyzeFiling('${filing.accession_number}')" class="text-green-600 hover:text-green-800 text-sm">
+                                Analyze
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+
+            // Update pagination
+            document.getElementById('current-page').textContent = currentPage + 1;
+            document.getElementById('prev-page').disabled = currentPage === 0;
+            document.getElementById('next-page').disabled = filings.length < itemsPerPage;
+        }
+
+        function getFormTypeColor(formType) {
+            const colors = {
+                '10-K': 'bg-purple-100 text-purple-800',
+                '10-Q': 'bg-blue-100 text-blue-800',
+                '8-K': 'bg-green-100 text-green-800',
+                'DEF 14A': 'bg-yellow-100 text-yellow-800',
+                'S-1': 'bg-pink-100 text-pink-800',
+                '424B': 'bg-indigo-100 text-indigo-800',
+                'SC 13': 'bg-orange-100 text-orange-800',
+                '13F-HR': 'bg-teal-100 text-teal-800',
+                '4': 'bg-gray-100 text-gray-800'
+            };
+
+            for (const [key, value] of Object.entries(colors)) {
+                if (formType && formType.startsWith(key)) {
+                    return value;
+                }
+            }
+            return 'bg-gray-100 text-gray-800';
+        }
+
+        function getStatusColor(status) {
+            const colors = {
+                'completed': 'bg-green-100 text-green-800',
+                'processing': 'bg-yellow-100 text-yellow-800',
+                'queued': 'bg-blue-100 text-blue-800',
+                'failed': 'bg-red-100 text-red-800',
+                'discovered': 'bg-gray-100 text-gray-800'
+            };
+            return colors[status] || 'bg-gray-100 text-gray-800';
+        }
+
+        async function loadStats() {
+            try {
+                const response = await fetch(`${API_URL}/api/filings/stats`);
+                if (!response.ok) throw new Error('Failed to load stats');
+
+                const stats = await response.json();
+
+                document.getElementById('stat-total-filings').textContent = stats.total_filings || '0';
+                document.getElementById('stat-total-companies').textContent = stats.total_companies || '0';
+
+                const statusDist = stats.status_distribution || {};
+                document.getElementById('stat-completed').textContent = statusDist.completed || '0';
+                document.getElementById('stat-processing').textContent = statusDist.processing || '0';
+                document.getElementById('stat-failed').textContent = statusDist.failed || '0';
+
+                if (stats.last_updated) {
+                    const date = new Date(stats.last_updated);
+                    document.getElementById('last-updated').textContent = date.toLocaleString();
+                }
+
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        async function showFilingDetail(accessionNumber) {
+            try {
+                const response = await fetch(`${API_URL}/api/filings/${accessionNumber}`);
+                if (!response.ok) throw new Error('Failed to load filing details');
+
+                const filing = await response.json();
+
+                const detailContent = document.getElementById('filing-detail-content');
+                detailContent.innerHTML = `
+                    <div class="space-y-6">
+                        <div>
+                            <h4 class="text-lg font-semibold text-gray-800 mb-3">Company Information</h4>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <p class="text-sm text-gray-600">Company Name</p>
+                                    <p class="font-medium">${filing.company.name}</p>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-600">CIK Number</p>
+                                    <p class="font-medium">${filing.company.cik || 'N/A'}</p>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-600">Ticker Symbol</p>
+                                    <p class="font-medium">${filing.company.ticker || 'N/A'}</p>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-600">Accession Number</p>
+                                    <p class="font-medium">${filing.accession_number}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h4 class="text-lg font-semibold text-gray-800 mb-3">Filing Information</h4>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <p class="text-sm text-gray-600">Form Type</p>
+                                    <p class="font-medium">${filing.form_type}</p>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-600">Filing Date</p>
+                                    <p class="font-medium">${filing.filing_date ? new Date(filing.filing_date).toLocaleDateString() : 'N/A'}</p>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-600">Period Date</p>
+                                    <p class="font-medium">${filing.period_date ? new Date(filing.period_date).toLocaleDateString() : 'N/A'}</p>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-600">Acceptance DateTime</p>
+                                    <p class="font-medium">${filing.acceptance_datetime ? new Date(filing.acceptance_datetime).toLocaleString() : 'N/A'}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h4 class="text-lg font-semibold text-gray-800 mb-3">Processing Information</h4>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <p class="text-sm text-gray-600">Status</p>
+                                    <span class="px-2 py-1 text-xs rounded-full ${getStatusColor(filing.status)}">
+                                        ${filing.status}
+                                    </span>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-600">Processing Stage</p>
+                                    <p class="font-medium">${filing.processing_stage || 'N/A'}</p>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-600">File Size</p>
+                                    <p class="font-medium">${filing.file_size_bytes ? `${(filing.file_size_bytes / (1024 * 1024)).toFixed(2)} MB` : 'N/A'}</p>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-600">Chunk Count</p>
+                                    <p class="font-medium">${filing.chunk_count || '0'}</p>
+                                </div>
+                            </div>
+                            ${filing.error_message ? `
+                                <div class="mt-4 p-3 bg-red-50 border border-red-200 rounded">
+                                    <p class="text-sm text-red-800"><strong>Error:</strong> ${filing.error_message}</p>
+                                </div>
+                            ` : ''}
+                        </div>
+
+                        ${filing.documents && filing.documents.length > 0 ? `
+                            <div>
+                                <h4 class="text-lg font-semibold text-gray-800 mb-3">Documents (${filing.documents.length})</h4>
+                                <div class="space-y-2">
+                                    ${filing.documents.map(doc => `
+                                        <div class="flex justify-between items-center p-2 border rounded hover:bg-gray-50">
+                                            <span class="text-sm">${doc.document_type || 'Document'}</span>
+                                            <span class="text-xs ${doc.processed ? 'text-green-600' : 'text-gray-500'}">
+                                                ${doc.processed ? 'Processed' : 'Not processed'}
+                                            </span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
+
+                        <div class="flex justify-end space-x-3 pt-4 border-t">
+                            ${filing.filing_url ? `
+                                <a href="${filing.filing_url}" target="_blank" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+                                    View on SEC.gov
+                                </a>
+                            ` : ''}
+                            <button onclick="analyzeFiling('${filing.accession_number}')" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">
+                                Analyze in Chat
+                            </button>
+                        </div>
+                    </div>
+                `;
+
+                document.getElementById('filing-detail-modal').classList.add('show');
+
+            } catch (error) {
+                console.error('Error loading filing details:', error);
+                alert('Failed to load filing details');
+            }
+        }
+
+        function closeDetailModal() {
+            document.getElementById('filing-detail-modal').classList.remove('show');
+        }
+
+        function viewFiling(cik, accessionNumber) {
+            // Construct proper SEC EDGAR URL
+            // Remove leading zeros from CIK
+            const cleanCik = cik ? cik.replace(/^0+/, '') : '';
+            // Remove dashes from accession number for directory path
+            const accessionDir = accessionNumber.replace(/-/g, '');
+            // Open SEC.gov in new tab with proper URL format
+            const url = `https://www.sec.gov/Archives/edgar/data/${cleanCik}/${accessionDir}/${accessionNumber}-index.htm`;
+            window.open(url, '_blank');
+        }
+
+        function analyzeFiling(accessionNumber) {
+            // Navigate to chat with pre-filled query
+            window.location.href = `index.html?analyze=${accessionNumber}`;
+        }
+
+        function applyFilters() {
+            currentFilters = {};
+
+            const company = document.getElementById('company-search').value.trim();
+            if (company) currentFilters.company = company;
+
+            const formType = document.getElementById('form-type-filter').value;
+            if (formType) currentFilters.form_type = formType;
+
+            const status = document.getElementById('status-filter').value;
+            if (status) currentFilters.status = status;
+
+            const startDate = document.getElementById('start-date').value;
+            if (startDate) currentFilters.start_date = startDate;
+
+            const endDate = document.getElementById('end-date').value;
+            if (endDate) currentFilters.end_date = endDate;
+
+            currentPage = 0;
+            loadFilings();
+        }
+
+        function debounceSearch() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                applyFilters();
+            }, 500);
+        }
+
+        function clearFilters() {
+            document.getElementById('company-search').value = '';
+            document.getElementById('form-type-filter').value = '';
+            document.getElementById('status-filter').value = '';
+            document.getElementById('start-date').value = '';
+            document.getElementById('end-date').value = '';
+            currentFilters = {};
+            currentPage = 0;
+            loadFilings();
+        }
+
+        function refreshFilings() {
+            loadFilings();
+            loadStats();
+        }
+
+        function previousPage() {
+            if (currentPage > 0) {
+                currentPage--;
+                loadFilings();
+            }
+        }
+
+        function nextPage() {
+            currentPage++;
+            loadFilings();
+        }
+
+        function changeItemsPerPage() {
+            itemsPerPage = parseInt(document.getElementById('items-per-page').value);
+            currentPage = 0;
+            loadFilings();
+        }
+    </script>
+</body>
+</html>

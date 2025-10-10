@@ -19,6 +19,7 @@ import numpy as np
 
 from ..config.settings import Settings, get_settings
 from ..models.filing import SECFiling, ProcessingStage
+from .vector_store import VectorStore
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,14 @@ class RAGPipeline:
         self.total_chunks_processed = 0
         self.total_embeddings_generated = 0
         self.total_tokens_processed = 0
+
+        # Initialize vector store
+        try:
+            self.vector_store = VectorStore()
+            logger.info("Vector store initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize vector store: {e}")
+            self.vector_store = None
 
     def _token_length(self, text: str) -> int:
         """
@@ -134,12 +143,52 @@ class RAGPipeline:
             # Prepare for storage
             filing.current_stage = ProcessingStage.VECTOR_STORAGE
 
-            # Store in vector database (handled by vector_store.py)
+            # Store in vector database and get vector IDs
+            chunks_data = []
+            vector_stored = False
+
+            if self.vector_store and chunks_with_embeddings:
+                try:
+                    # Prepare chunks for vector storage
+                    chunks_for_storage = []
+                    for chunk in chunks_with_embeddings:
+                        chunk_dict = self._chunk_to_dict(chunk)
+                        # Add filing metadata
+                        chunk_dict['accession_number'] = filing.accession_number
+                        chunk_dict['company_name'] = filing.company_name
+                        chunk_dict['form_type'] = filing.form_type
+                        chunk_dict['filing_date'] = filing.filing_date.isoformat() if filing.filing_date else None
+                        chunks_for_storage.append(chunk_dict)
+
+                    # Store in Qdrant and get vector IDs
+                    vector_ids = await self.vector_store.store_chunks(
+                        chunks_for_storage,
+                        filing.accession_number
+                    )
+
+                    if vector_ids:
+                        vector_stored = True
+                        logger.info(f"Successfully stored {len(vector_ids)} vectors for {filing.accession_number}")
+
+                        # Add vector IDs to chunks data
+                        for chunk_dict, vector_id in zip(chunks_for_storage, vector_ids):
+                            chunk_dict['vector_id'] = vector_id
+                            chunks_data.append(chunk_dict)
+                    else:
+                        logger.warning(f"Failed to store vectors for {filing.accession_number}")
+                        chunks_data = chunks_for_storage
+                except Exception as e:
+                    logger.error(f"Error storing vectors: {e}")
+                    chunks_data = [self._chunk_to_dict(chunk) for chunk in chunks_with_embeddings]
+            else:
+                chunks_data = [self._chunk_to_dict(chunk) for chunk in chunks_with_embeddings]
+
             storage_data = {
-                "chunks": [self._chunk_to_dict(chunk) for chunk in chunks_with_embeddings],
+                "chunks": chunks_data,
                 "total_chunks": len(chunks_with_embeddings),
                 "total_tokens": total_tokens,
-                "metadata": self._create_filing_metadata(filing)
+                "metadata": self._create_filing_metadata(filing),
+                "vectors_stored": vector_stored
             }
 
             # Update filing
