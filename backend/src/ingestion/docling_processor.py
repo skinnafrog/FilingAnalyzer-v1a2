@@ -597,7 +597,7 @@ class DoclingProcessor:
             document_metadata = {
                 "accession_number": filing.accession_number,
                 "company_name": filing.company_name,
-                "company_cik": filing.company_cik,
+                "company_cik": filing.cik_number,
                 "form_type": filing.form_type,
                 "filing_date": filing.filing_date.isoformat() if filing.filing_date else None,
                 "is_insider_filing": getattr(filing, 'is_insider_filing', False),
