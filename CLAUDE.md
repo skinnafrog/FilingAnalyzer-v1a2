@@ -200,6 +200,73 @@ Component-specific GitHub repositories will be provided during implementation fo
 - **PRP Framework**: All features implemented using PRP methodology
 - **Validation Gates**: 4-level validation for all implementations
 
+## Change Management & Tracking
+
+### 📋 ERROR_LOG.md Requirements
+
+**CRITICAL**: All significant changes, bug fixes, and enhancements MUST be documented in [ERROR_LOG.md](./ERROR_LOG.md) using the standardized format:
+
+```markdown
+### [YYYY-MM-DD HH:MM] - [TYPE] - [TITLE]
+**Issue:** Description of the problem or enhancement request
+**Root Cause:** Technical analysis of underlying cause
+**Solution:** Detailed implementation approach
+**Files Modified:** List of changed files
+**Impact:** System impact and restart requirements
+**Status:** ✅ Resolved | ⚠️ Partial | ❌ Open
+**Restart Required:** Yes/No - Use ./stop.sh && ./start.sh
+```
+
+### 🔄 Automated Change Management
+
+1. **Document First**: Always update ERROR_LOG.md before implementing changes
+2. **Assess Impact**: Determine if system restart is required (see restart guidelines)
+3. **Implement Changes**: Make code modifications with clear commit messages
+4. **Test Thoroughly**: Verify changes don't break existing functionality
+5. **Auto-Push**: Automatically push productive changes to GitHub with proper commit messages including:
+   - Clear description of changes
+   - Reference to ERROR_LOG.md entry
+   - Impact assessment
+   - Co-authored by Claude tag
+
+### 🚨 System Restart Assessment
+
+**Always restart after changes to:**
+- Database models (`backend/src/database/models.py`)
+- Core ingestion pipeline (`backend/src/ingestion/*.py`)
+- API endpoints (`backend/src/api/*.py`)
+- Docker configuration (`docker-compose.yml`, `Dockerfile`)
+- Environment variables (`.env` files)
+- Dependencies (`requirements.txt`, `package.json`)
+
+**Use appropriate restart method:**
+```bash
+# Full system restart (recommended for major changes)
+./stop.sh && ./start.sh
+
+# Backend-only restart (for Python code changes)
+docker-compose restart backend
+
+# Specific service restart
+docker-compose restart [service-name]
+```
+
+### 📝 Commit Message Standards
+
+```bash
+git commit -m "[TYPE]: Brief description
+
+- Detailed change 1
+- Detailed change 2
+- Reference: ERROR_LOG.md entry [YYYY-MM-DD HH:MM]
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+```
+
+**Types:** BUG FIX, ENHANCEMENT, OPTIMIZATION, SECURITY, MIGRATION, DOCUMENTATION, CONFIGURATION
+
 ---
 
 Note: This file will be continuously updated as the project evolves and new patterns emerge.

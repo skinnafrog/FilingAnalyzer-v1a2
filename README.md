@@ -8,6 +8,7 @@ AI-powered SEC filing analysis platform with automated ingestion, knowledge grap
 - **[CLAUDE.md](./CLAUDE.md)** - Development guidelines for Claude Code
 - **[AGENTS.md](./AGENTS.md)** - Agent configuration and response formatting
 - **[PORT_CONFIGURATION.md](./PORT_CONFIGURATION.md)** - Service port mappings
+- **[ERROR_LOG.md](./ERROR_LOG.md)** - Comprehensive change tracking, bug fixes, and system modifications
 
 ## 🚀 Quick Start
 
@@ -245,6 +246,8 @@ docker-compose down
 - **Error Rate Target**: <5%
 
 ## 🚨 Troubleshooting
+
+**📋 For detailed change history, resolved issues, and system modifications, see [ERROR_LOG.md](./ERROR_LOG.md)**
 
 ### Common Issues
 
