@@ -69,13 +69,24 @@ class VectorStore:
             List of vector IDs for stored chunks
         """
         try:
+            logger.info(f"Storing {len(chunks)} chunks for filing {filing_id}")
             points = []
             vector_ids = []
+            skipped = 0
 
-            for chunk in chunks:
+            for idx, chunk in enumerate(chunks):
                 # Skip chunks without embeddings
-                if not chunk.get('embedding'):
+                embedding = chunk.get('embedding')
+                if not embedding:
+                    logger.debug(f"Chunk {idx} has no embedding, skipping")
                     vector_ids.append(None)
+                    skipped += 1
+                    continue
+
+                if not isinstance(embedding, list) or len(embedding) == 0:
+                    logger.warning(f"Chunk {idx} has invalid embedding format: {type(embedding)}, len: {len(embedding) if isinstance(embedding, list) else 'N/A'}")
+                    vector_ids.append(None)
+                    skipped += 1
                     continue
 
                 # Generate unique ID for the vector
@@ -107,15 +118,17 @@ class VectorStore:
                 points.append(point)
 
             if points:
+                logger.info(f"Uploading {len(points)} vectors to Qdrant (skipped {skipped} chunks without embeddings)")
                 # Batch upload to Qdrant
-                self.client.upsert(
+                operation_result = self.client.upsert(
                     collection_name=self.collection_name,
                     points=points
                 )
-                logger.info(f"Stored {len(points)} vectors for filing {filing_id}")
+                logger.info(f"Qdrant upload result: {operation_result}")
+                logger.info(f"Successfully stored {len(points)} vectors for filing {filing_id}")
                 return vector_ids
             else:
-                logger.warning(f"No vectors to store for filing {filing_id}")
+                logger.warning(f"No vectors to store for filing {filing_id} (all {len(chunks)} chunks lacked embeddings)")
                 return []
 
         except Exception as e:

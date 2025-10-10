@@ -69,17 +69,31 @@ class DoclingProcessor:
                 InputFormat.PDF: pdf_pipeline_options,
             }
 
-            # Initialize converter with Docling v2 API
-            self.converter = DocumentConverter(
-                allowed_formats=[
-                    InputFormat.PDF,
-                    InputFormat.HTML,
-                    InputFormat.DOCX,
-                    InputFormat.XLSX,
-                    InputFormat.IMAGE
-                ],
-                pipeline_options=pipeline_options  # Changed from pdf_options to pipeline_options
-            )
+            # Initialize converter - checking Docling API version
+            try:
+                # Try new API first (if supported)
+                self.converter = DocumentConverter(
+                    allowed_formats=[
+                        InputFormat.PDF,
+                        InputFormat.HTML,
+                        InputFormat.DOCX,
+                        InputFormat.XLSX,
+                        InputFormat.IMAGE
+                    ],
+                    pipeline_options=pipeline_options
+                )
+            except TypeError as e:
+                # Fallback to older API if pipeline_options not supported
+                logger.warning(f"Docling API does not support pipeline_options, using default: {e}")
+                self.converter = DocumentConverter(
+                    allowed_formats=[
+                        InputFormat.PDF,
+                        InputFormat.HTML,
+                        InputFormat.DOCX,
+                        InputFormat.XLSX,
+                        InputFormat.IMAGE
+                    ]
+                )
 
             logger.info("Docling converter initialized successfully")
 

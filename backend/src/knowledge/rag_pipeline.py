@@ -528,10 +528,12 @@ class RAGPipeline:
             Chunks with embeddings
         """
         chunks_with_embeddings = []
+        logger.info(f"Generating embeddings for {len(chunks)} chunks")
 
         # Process in batches
         for i in range(0, len(chunks), self.embedding_batch_size):
             batch = chunks[i:i + self.embedding_batch_size]
+            logger.debug(f"Processing batch {i // self.embedding_batch_size + 1}, size: {len(batch)}")
 
             # Check cache first
             uncached_chunks = []
@@ -543,22 +545,29 @@ class RAGPipeline:
                     uncached_chunks.append(chunk)
 
             if uncached_chunks:
+                logger.info(f"Generating embeddings for {len(uncached_chunks)} uncached chunks")
                 # Generate embeddings for uncached chunks
                 texts = [chunk.content for chunk in uncached_chunks]
 
                 try:
                     # Call OpenAI API with retry logic
                     embeddings = await self._generate_embeddings_with_retry(texts)
+                    logger.info(f"Successfully generated {len(embeddings)} embeddings")
 
                     # Assign embeddings to chunks
                     for chunk, embedding in zip(uncached_chunks, embeddings):
-                        chunk.embedding = embedding
-                        # Cache the embedding
-                        self.embedding_cache[chunk.chunk_id] = embedding
-                        chunks_with_embeddings.append(chunk)
+                        if embedding and len(embedding) > 0:
+                            chunk.embedding = embedding
+                            # Cache the embedding
+                            self.embedding_cache[chunk.chunk_id] = embedding
+                            chunks_with_embeddings.append(chunk)
+                            logger.debug(f"Added embedding for chunk {chunk.chunk_id}, dim: {len(embedding)}")
+                        else:
+                            logger.warning(f"Empty embedding for chunk {chunk.chunk_id}")
+                            chunks_with_embeddings.append(chunk)
 
                 except Exception as e:
-                    logger.error(f"Failed to generate embeddings for batch: {e}")
+                    logger.error(f"Failed to generate embeddings for batch: {e}", exc_info=True)
                     # Continue without embeddings for failed batch
                     chunks_with_embeddings.extend(uncached_chunks)
 
@@ -581,12 +590,14 @@ class RAGPipeline:
         """
         for attempt in range(max_retries):
             try:
+                logger.debug(f"Calling OpenAI API for {len(texts)} texts with model {self.embedding_model}")
                 response = await self.openai_client.embeddings.create(
                     model=self.embedding_model,
                     input=texts
                 )
 
                 embeddings = [item.embedding for item in response.data]
+                logger.info(f"OpenAI API returned {len(embeddings)} embeddings")
                 return embeddings
 
             except openai.RateLimitError as e:
