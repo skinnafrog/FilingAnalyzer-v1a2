@@ -20,6 +20,7 @@ from docling.datamodel.document import ConversionResult
 from ..config.settings import Settings, get_settings
 from ..models.filing import SECFiling, ProcessingStage
 from .issuer_extractor import IssuerExtractor
+from ..knowledge.shareholding_pipeline import ShareholdingPipeline
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,9 @@ class DoclingProcessor:
 
         # Initialize issuer extractor for Form 3/4/5 filings
         self.issuer_extractor = IssuerExtractor()
+
+        # Initialize shareholding pipeline for optimized knowledge graph processing
+        self.shareholding_pipeline = ShareholdingPipeline(settings)
 
     def _init_converter(self):
         """Initialize Docling converter with pipeline options."""
@@ -172,6 +176,13 @@ class DoclingProcessor:
                     f"Issuer={issuer_data.get('issuer_name')}, "
                     f"Owner={issuer_data.get('reporting_owner_name')}"
                 )
+
+            # Process with shareholding pipeline for optimized knowledge graph ingestion
+            shareholding_success = await self._process_with_shareholding_pipeline(filing, extracted_data)
+            if shareholding_success:
+                logger.info(f"Successfully processed {filing.accession_number} with shareholding pipeline")
+            else:
+                logger.warning(f"Shareholding pipeline processing failed for {filing.accession_number}")
 
             # Save processed data
             processed_file = await self._save_processed_data(filing, extracted_data)
@@ -563,6 +574,60 @@ class DoclingProcessor:
             logger.debug(f"Error extracting metrics: {e}")
 
         return metrics
+
+    async def _process_with_shareholding_pipeline(
+        self,
+        filing: SECFiling,
+        extracted_data: Dict[str, Any]
+    ) -> bool:
+        """
+        Process filing with shareholding-optimized pipeline for enhanced knowledge graph ingestion.
+
+        Args:
+            filing: SECFiling object
+            extracted_data: Extracted document data
+
+        Returns:
+            True if processing succeeded, False otherwise
+        """
+        try:
+            logger.debug(f"Processing {filing.accession_number} with shareholding pipeline")
+
+            # Prepare document for shareholding pipeline
+            document_metadata = {
+                "accession_number": filing.accession_number,
+                "company_name": filing.company_name,
+                "company_cik": filing.company_cik,
+                "form_type": filing.form_type,
+                "filing_date": filing.filing_date.isoformat() if filing.filing_date else None,
+                "is_insider_filing": getattr(filing, 'is_insider_filing', False),
+                "issuer_name": getattr(filing, 'issuer_name', None),
+                "issuer_cik": getattr(filing, 'issuer_cik', None),
+                "issuer_ticker": getattr(filing, 'issuer_ticker', None),
+                "reporting_owner_name": getattr(filing, 'reporting_owner_name', None)
+            }
+
+            # Process through shareholding pipeline
+            success = await self.shareholding_pipeline.process_document(
+                text_content=extracted_data.get("text", ""),
+                tables=extracted_data.get("tables", []),
+                metadata=document_metadata
+            )
+
+            if success:
+                logger.debug(f"Shareholding pipeline processing completed for {filing.accession_number}")
+
+                # Update filing to indicate advanced processing completion
+                filing.processed_with_shareholding_pipeline = True
+
+                return True
+            else:
+                logger.warning(f"Shareholding pipeline processing failed for {filing.accession_number}")
+                return False
+
+        except Exception as e:
+            logger.error(f"Error in shareholding pipeline processing for {filing.accession_number}: {e}", exc_info=True)
+            return False
 
     async def _save_processed_data(
         self,

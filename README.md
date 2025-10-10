@@ -83,12 +83,16 @@ v1a2/
 │   │   ├── ingestion/     # SEC filing pipeline
 │   │   │   ├── rss_monitor.py       # RSS feed discovery
 │   │   │   ├── filing_downloader.py # Document retrieval
-│   │   │   ├── docling_processor.py # Content extraction
+│   │   │   ├── docling_processor.py # Content extraction with shareholding pipeline
 │   │   │   └── issuer_extractor.py  # Form 3/4/5 issuer identification
 │   │   ├── knowledge/     # RAG and knowledge graph
-│   │   │   ├── rag_pipeline.py      # Embeddings & indexing
-│   │   │   ├── vector_store.py      # Qdrant integration
-│   │   │   └── hybrid_search.py     # Semantic + keyword search
+│   │   │   ├── rag_pipeline.py              # Embeddings & indexing
+│   │   │   ├── vector_store.py              # Qdrant integration
+│   │   │   ├── hybrid_search.py             # Semantic + keyword search
+│   │   │   ├── shareholding_classifier.py   # Entity classification system
+│   │   │   ├── shareholding_neo4j_store.py  # Enhanced knowledge graph schema
+│   │   │   ├── shareholding_pipeline.py     # Integrated shareholding processing
+│   │   │   └── migrate_shareholding_data.py # Data migration script
 │   │   ├── database/      # Database models & connections
 │   │   ├── models/        # Data models
 │   │   ├── tasks.py       # Celery tasks
@@ -127,12 +131,21 @@ v1a2/
 - Extracts text, tables, and images from documents
 - Identifies financial statements
 - Extracts shareholder information
+- **NEW**: Integrated shareholding pipeline for enhanced entity classification
+- **NEW**: Automatic processing of filings with shareholding-optimized knowledge graph storage
 
 ### 4. RAG Pipeline (`knowledge/rag_pipeline.py`)
 - Chunks documents intelligently
 - Generates OpenAI embeddings (text-embedding-ada-002)
 - Stores vectors in Qdrant with metadata
 - Hybrid search combining semantic and keyword matching
+
+### 5. **NEW**: Shareholding Knowledge Graph (`knowledge/shareholding_*.py`)
+- **Enhanced Entity Classification**: Prevents misclassification of financial data as people
+- **Optimized Neo4j Schema**: Specialized nodes for shareholders, positions, and ownership events
+- **Temporal Tracking**: Captures ownership evolution and transaction history
+- **Query Optimization**: Maximized for shareholding, percentage, and ownership queries
+- **Data Migration**: Automated cleanup of existing incorrect classifications
 
 ## 🔍 Monitoring
 
@@ -265,6 +278,25 @@ docker-compose down
      - Database schema enhancement with new issuer-specific fields
      - Confidence scoring for extraction quality
    - **Impact**: Chat queries now correctly identify issuer companies for insider filings
+
+2. **✅ Shareholding-Optimized Knowledge Graph System - COMPLETED**
+   - **Issue**: Knowledge graph incorrectly classified financial numbers and text fragments as "Person" entities
+   - **Solution**: Comprehensive shareholding-optimized entity classification and storage system
+   - **Features**:
+     - **Enhanced Entity Classification**: Specialized classifier prevents misclassification of numbers/fragments as people
+     - **Shareholding-Optimized Neo4j Schema**: New node types (ShareholderPerson, ShareholderEntity, SharePosition, IssuanceEvent)
+     - **Temporal Ownership Tracking**: Captures ownership evolution and transaction history
+     - **Integrated Processing Pipeline**: Automatic processing through enhanced Docling processor
+     - **Query Optimization**: Maximized retrieval success for shareholding, percentage, and temporal queries
+     - **Data Migration**: Comprehensive cleanup of existing incorrect classifications
+     - **Hybrid Search Enhancement**: Optimized for ownership-related semantic and keyword searches
+   - **Key Components**:
+     - `shareholding_classifier.py`: Advanced entity validation and classification
+     - `shareholding_neo4j_store.py`: Enhanced knowledge graph schema and operations
+     - `shareholding_pipeline.py`: Integrated extraction and storage pipeline
+     - `migrate_shareholding_data.py`: Legacy data cleanup and migration
+     - `test_shareholding_system.py`: Comprehensive testing suite
+   - **Impact**: Dramatically improved accuracy for shareholder queries, beneficial ownership tracking, and ownership percentage retrieval
 
 ## 📝 Next Steps
 

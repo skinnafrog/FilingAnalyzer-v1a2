@@ -48,6 +48,7 @@ class Filing(Base):
     status = Column(String(20), default="pending", index=True)  # pending, processing, completed, failed
     processed_at = Column(DateTime)
     error_message = Column(Text)
+    processed_with_shareholding_pipeline = Column(Boolean, default=False)
 
     # Metadata
     file_url = Column(String(500))

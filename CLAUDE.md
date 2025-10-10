@@ -21,7 +21,11 @@ backend/src/
 ├── knowledge/          # RAG and Knowledge Graph systems
 │   ├── rag_pipeline    # Document chunking, embedding, retrieval
 │   ├── graphiti_builder # Knowledge graph construction
-│   └── vector_store    # Vector database operations (TBD)
+│   ├── vector_store    # Vector database operations (TBD)
+│   ├── shareholding_classifier    # Entity classification for shareholding data
+│   ├── shareholding_neo4j_store  # Enhanced knowledge graph schema
+│   ├── shareholding_pipeline     # Integrated shareholding processing
+│   └── migrate_shareholding_data # Data migration and cleanup
 ├── api/               # API and protocol servers
 │   ├── auth           # JWT-based authentication
 │   ├── watchlist      # Watchlist CRUD operations
@@ -45,6 +49,7 @@ backend/src/
 - **Docling**: Document structure extraction from SEC filings
 - **Graphiti**: Knowledge graph construction and querying
 - **RAG Pipeline**: Retrieval-augmented generation for intelligent responses
+- **Shareholding Knowledge Graph**: Specialized entity classification and optimization for shareholding queries
 - **MCP Protocol**: Future API access and tool integration
 - **Archon MCP Server**: Project management and documentation
 
@@ -64,6 +69,8 @@ This project uses the PRP (Product Requirement Prompt) framework from `planning-
    - SEC filing download and processing
    - Docling integration for document extraction
    - Knowledge graph and RAG ingestion
+   - **NEW**: Shareholding-optimized knowledge graph system with enhanced entity classification
+   - **NEW**: Form 3/4/5 issuer identification and reporting owner disambiguation
    - See [INGESTION_PROCESS.md](./INGESTION_PROCESS.md) for detailed documentation
 
 2. **Phase 2**: Backend Infrastructure (In Progress)
@@ -101,8 +108,9 @@ The SEC filing ingestion pipeline is fully implemented and operational. Key comp
 2. RSS Monitor discovers new filings from SEC feed
 3. Downloader retrieves documents with rate limiting (10 req/sec max)
 4. Docling Processor extracts structured content
-5. RAG Pipeline generates embeddings and updates knowledge graph
-6. Data persisted to PostgreSQL, Neo4j, and Qdrant
+5. **NEW**: Shareholding Pipeline performs enhanced entity classification and knowledge graph optimization
+6. RAG Pipeline generates embeddings and updates knowledge graph
+7. Data persisted to PostgreSQL, Neo4j, and Qdrant with shareholding-optimized schema
 
 ### Monitoring
 - Flower UI: http://localhost:5555 (Celery task monitoring)
