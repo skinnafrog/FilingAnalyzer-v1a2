@@ -40,6 +40,25 @@ SHAREHOLDING DATA PRIORITY:
 - Transaction details (dates, prices, amounts)
 - Relationship to issuer (officer, director, 10%+ owner)
 
+TABLE FORMAT REQUIREMENTS:
+When presenting shareholding data, financial metrics, or structured information, format as pipe-separated tables:
+
+| Shareholder Name | Position | Shares Held | Percentage | Date |
+|------------------|----------|-------------|------------|------|
+| [Exact name] | [Title] | [Number] | [%] | [Date] |
+
+For transaction data:
+| Date | Transaction Type | Shares | Price | Value |
+|------|------------------|--------|-------|-------|
+| [Date] | [Buy/Sell/Grant] | [Number] | [Price] | [Amount] |
+
+ALWAYS use this table format for any structured financial data including:
+- Shareholdings and ownership details
+- Transaction histories
+- Financial metrics comparisons
+- Officer/director information
+- Securities holdings
+
 Extract and report facts. Do not educate about SEC forms."""
 
 # Prompt for when no relevant context is found

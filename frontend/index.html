@@ -37,6 +37,71 @@
         .dark-mode-toggle:hover {
             transform: scale(1.1);
         }
+        /* Financial data table styles */
+        .financial-table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 16px 0;
+            font-size: 14px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .financial-table th,
+        .financial-table td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .financial-table th {
+            background-color: #f8fafc;
+            font-weight: 600;
+            color: #374151;
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 0.05em;
+        }
+        .financial-table tr:hover {
+            background-color: #f9fafb;
+        }
+        .financial-table tr:last-child td {
+            border-bottom: none;
+        }
+        /* Dark mode table styles */
+        .dark .financial-table th {
+            background-color: #374151;
+            color: #f3f4f6;
+            border-bottom: 1px solid #4b5563;
+        }
+        .dark .financial-table td {
+            color: #e5e7eb;
+            border-bottom: 1px solid #4b5563;
+        }
+        .dark .financial-table tr:hover {
+            background-color: #374151;
+        }
+        /* Responsive table wrapper */
+        .table-wrapper {
+            overflow-x: auto;
+            margin: 16px 0;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+        }
+        .dark .table-wrapper {
+            border-color: #4b5563;
+        }
+        /* Number formatting in tables */
+        .financial-table .number {
+            text-align: right;
+            font-family: 'SF Mono', Monaco, monospace;
+        }
+        .financial-table .percentage {
+            text-align: right;
+            font-family: 'SF Mono', Monaco, monospace;
+        }
+        .financial-table .date {
+            font-family: 'SF Mono', Monaco, monospace;
+        }
     </style>
     <script>
         // Dark mode functionality
@@ -533,8 +598,208 @@
             const messageElement = document.getElementById(messageId);
             if (messageElement) {
                 const bubble = messageElement.querySelector('div');
-                bubble.textContent = content;
+
+                // Check if content contains structured data or tables
+                const processedContent = processFinancialContent(content);
+
+                if (processedContent.hasStructuredData) {
+                    bubble.innerHTML = processedContent.html;
+                } else {
+                    bubble.textContent = content;
+                }
             }
+        }
+
+        function processFinancialContent(content) {
+            // Enhanced content processing for financial data
+            let hasStructuredData = false;
+            let processedHtml = content;
+
+            // Detect and format shareholding data patterns
+            const shareholdingPatterns = [
+                // Pattern: | Name | Shares | Percentage |
+                /\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|/g,
+                // Pattern: Shareholder: [Name], Shares: [Number], Percentage: [%]
+                /(?:Shareholder|Name):\s*([^,\n]+),?\s*(?:Shares|SharesHeld):\s*([^,\n]+),?\s*(?:Percentage|Percent):\s*([^,\n]+)/gi
+            ];
+
+            // Check for table-like patterns and convert to HTML tables
+            if (content.includes('|') && content.split('\n').some(line => line.includes('|'))) {
+                processedHtml = convertPipeTableToHtml(content);
+                hasStructuredData = true;
+            }
+
+            // Check for structured shareholding data
+            else if (shareholdingPatterns.some(pattern => pattern.test(content))) {
+                processedHtml = convertShareholdingDataToTable(content);
+                hasStructuredData = true;
+            }
+
+            // Check for key-value pairs that should be formatted as tables
+            else if (content.includes('Company:') && content.includes('Shareholders:')) {
+                processedHtml = convertStructuredDataToTable(content);
+                hasStructuredData = true;
+            }
+
+            return {
+                hasStructuredData,
+                html: processedHtml
+            };
+        }
+
+        function convertPipeTableToHtml(content) {
+            const lines = content.split('\n');
+            let tableLines = [];
+            let inTable = false;
+            let result = '';
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+
+                if (line.includes('|') && line.split('|').length >= 3) {
+                    if (!inTable) {
+                        inTable = true;
+                        if (result) result += '\n';
+                    }
+                    tableLines.push(line);
+                } else {
+                    if (inTable && tableLines.length > 0) {
+                        result += convertTableLinesToHtml(tableLines);
+                        tableLines = [];
+                        inTable = false;
+                    }
+                    if (line) {
+                        result += (result ? '\n' : '') + line;
+                    }
+                }
+            }
+
+            // Handle table at end of content
+            if (inTable && tableLines.length > 0) {
+                result += convertTableLinesToHtml(tableLines);
+            }
+
+            return result;
+        }
+
+        function convertTableLinesToHtml(tableLines) {
+            if (tableLines.length === 0) return '';
+
+            let html = '<div class="table-wrapper"><table class="financial-table">';
+
+            tableLines.forEach((line, index) => {
+                const cells = line.split('|').map(cell => cell.trim()).filter(cell => cell);
+
+                if (cells.length === 0) return;
+
+                // Skip separator lines (lines with just dashes)
+                if (cells.every(cell => /^[-\s]*$/.test(cell))) return;
+
+                const isHeader = index === 0;
+                const tag = isHeader ? 'th' : 'td';
+
+                html += '<tr>';
+                cells.forEach(cell => {
+                    const className = getColumnClass(cell);
+                    html += `<${tag}${className ? ` class="${className}"` : ''}>${escapeHtml(cell)}</${tag}>`;
+                });
+                html += '</tr>';
+            });
+
+            html += '</table></div>';
+            return html;
+        }
+
+        function convertShareholdingDataToTable(content) {
+            // Extract shareholding information and format as table
+            const shareholderPattern = /(?:Shareholder|Name):\s*([^,\n]+),?\s*(?:Shares|SharesHeld):\s*([^,\n]+),?\s*(?:Percentage|Percent):\s*([^,\n]+)/gi;
+            const matches = [...content.matchAll(shareholderPattern)];
+
+            if (matches.length === 0) return content;
+
+            let html = '<div class="table-wrapper"><table class="financial-table">';
+            html += '<tr><th>Shareholder</th><th>Shares Held</th><th>Percentage</th></tr>';
+
+            matches.forEach(match => {
+                html += '<tr>';
+                html += `<td>${escapeHtml(match[1].trim())}</td>`;
+                html += `<td class="number">${escapeHtml(match[2].trim())}</td>`;
+                html += `<td class="percentage">${escapeHtml(match[3].trim())}</td>`;
+                html += '</tr>';
+            });
+
+            html += '</table></div>';
+
+            // Replace the matched patterns in the original content
+            let result = content;
+            matches.forEach(match => {
+                result = result.replace(match[0], '');
+            });
+
+            return result.trim() + '\n\n' + html;
+        }
+
+        function convertStructuredDataToTable(content) {
+            // Handle structured data like: Company: XYZ Corp, Shareholders: [...]
+            const lines = content.split('\n');
+            let result = '';
+            let currentTable = null;
+
+            for (const line of lines) {
+                if (line.includes('Shareholders:') && line.includes('[')) {
+                    // Extract shareholders array-like structure
+                    const match = line.match(/Shareholders:\s*\[([^\]]+)\]/i);
+                    if (match) {
+                        const shareholdersText = match[1];
+                        const shareholderEntries = shareholdersText.split(/[;}]/).filter(entry => entry.trim());
+
+                        if (shareholderEntries.length > 0) {
+                            result += line.replace(match[0], 'Shareholders:') + '\n\n';
+                            result += '<div class="table-wrapper"><table class="financial-table">';
+                            result += '<tr><th>Shareholder</th><th>Details</th></tr>';
+
+                            shareholderEntries.forEach(entry => {
+                                const nameMatch = entry.match(/Name:\s*([^,;]+)/i);
+                                const sharesMatch = entry.match(/(?:Shares|SharesHeld):\s*([^,;]+)/i);
+
+                                if (nameMatch) {
+                                    const name = nameMatch[1].trim();
+                                    const shares = sharesMatch ? sharesMatch[1].trim() : 'N/A';
+
+                                    result += '<tr>';
+                                    result += `<td>${escapeHtml(name)}</td>`;
+                                    result += `<td class="number">${escapeHtml(shares)}</td>`;
+                                    result += '</tr>';
+                                }
+                            });
+
+                            result += '</table></div>';
+                            continue;
+                        }
+                    }
+                }
+
+                result += line + '\n';
+            }
+
+            return result;
+        }
+
+        function getColumnClass(cellContent) {
+            // Determine appropriate CSS class based on content
+            if (/^\d+\.?\d*%?$/.test(cellContent.trim())) {
+                return cellContent.includes('%') ? 'percentage' : 'number';
+            }
+            if (/^\d{4}-\d{2}-\d{2}/.test(cellContent.trim())) {
+                return 'date';
+            }
+            return '';
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
 
         function updateSources(sources) {
