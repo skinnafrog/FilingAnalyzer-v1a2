@@ -240,7 +240,7 @@
             if (analyzeParam) {
                 // Pre-fill the chat input with an analysis query
                 const input = document.getElementById('chat-input');
-                input.value = `Analyze the SEC filing with accession number ${analyzeParam}. Provide a summary of key financial metrics and important disclosures.`;
+                input.value = `Analyze the SEC filing with accession number ${analyzeParam}. Provide user with structured information thus: {Company: <Name(Ticker:Market)>}; {Shareholders: [{Name: <ShareholderName>; SharesHeld: <QuantityOfSharesHeld>; etc.}, etc.]; ... for example, so as to focus best on identification and reporting of shareholdings, shareholders, and any and all relevant details associated therewith.`;
                 // Optionally auto-send the message
                 setTimeout(() => {
                     addMessage('system', `Loading filing ${analyzeParam} for analysis...`);

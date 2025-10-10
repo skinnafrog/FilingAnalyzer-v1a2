@@ -20,6 +20,20 @@ This document tracks all significant changes, bug fixes, enhancements, and syste
 
 ## 📈 Recent Changes
 
+### [2025-10-10 06:15] - ENHANCEMENT - Streamlined Prompt System Architecture
+**Issue:** Prompt system contained 6 prompts but only 3 were actually used, with unused prompts lacking UI implementation mechanisms
+**Root Cause:** Over-engineered prompt system with speculative prompts that had no corresponding UI triggers or use cases
+**Solution:** Streamlined to 3 essential prompts matching actual usage patterns:
+- **Consolidated Main Prompt**: Merged `FILINGS_ANALYST_SYSTEM_PROMPT` and `FILING_ANALYSIS_PROMPT` into enhanced default
+- **Removed Unused Prompts**: Eliminated `FILING_SUMMARY_PROMPT` and `QUERY_REFINEMENT_PROMPT` (no UI implementation)
+- **Updated Default**: Changed `get_system_prompt()` default from `"default"` to `"analysis"` to match "Analyze in Chat" button
+- **Clean Architecture**: Now maps directly to actual usage: analysis (default), no_context (fallback), streaming (real-time)
+**Files Modified:**
+- `backend/src/config/prompts.py` (removed unused prompts, consolidated main prompt, updated function defaults)
+**Impact:** Cleaner, more focused prompt architecture that directly aligns with UI functionality
+**Status:** ✅ Resolved
+**Restart Required:** Yes - Applied via `docker-compose restart backend`
+
 ### [2025-10-10 04:45] - MAJOR BUG FIX - Comprehensive Form 3/4/5 Issuer Extraction Fix
 **Issue:** Systematic issuer extraction failure affecting 77 of 78 insider filings - reporting owner names incorrectly shown as issuers instead of actual issuer companies
 **Root Cause:** Issuer extraction patterns not designed to handle HTML-formatted Form 3/4/5 filings where issuer information is embedded in anchor tags and span elements
