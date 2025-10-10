@@ -78,7 +78,9 @@ v1a2/
 │   │   │   ├── filing_downloader.py # Document retrieval
 │   │   │   └── docling_processor.py # Content extraction
 │   │   ├── knowledge/     # RAG and knowledge graph
-│   │   │   └── rag_pipeline.py      # Embeddings & indexing
+│   │   │   ├── rag_pipeline.py      # Embeddings & indexing
+│   │   │   ├── vector_store.py      # Qdrant integration
+│   │   │   └── hybrid_search.py     # Semantic + keyword search
 │   │   ├── database/      # Database models & connections
 │   │   ├── models/        # Data models
 │   │   ├── tasks.py       # Celery tasks
@@ -120,8 +122,9 @@ v1a2/
 
 ### 4. RAG Pipeline (`knowledge/rag_pipeline.py`)
 - Chunks documents intelligently
-- Generates OpenAI embeddings
-- Prepares data for vector storage
+- Generates OpenAI embeddings (text-embedding-ada-002)
+- Stores vectors in Qdrant with metadata
+- Hybrid search combining semantic and keyword matching
 
 ## 🔍 Monitoring
 
@@ -149,6 +152,22 @@ The pipeline tracks:
 - Processing times
 - Token usage
 - Embeddings generated
+
+## 🔬 Hybrid RAG Search
+
+The platform implements a sophisticated hybrid search system combining:
+- **Vector Search**: Semantic similarity using OpenAI embeddings stored in Qdrant
+- **Keyword Search**: BM25 ranking and PostgreSQL full-text search
+- **Weighted Scoring**: Configurable balance between semantic and keyword relevance
+
+### Reprocess Embeddings
+```bash
+# Generate embeddings for existing chunks
+docker-compose exec backend python reprocess_embeddings.py --limit 50
+
+# Test hybrid search
+docker-compose exec backend python test_hybrid_search.py
+```
 
 ## 🧪 Testing
 
@@ -235,8 +254,9 @@ docker-compose down
 - [ ] API endpoints
 
 ### Phase 3: AI Chat Interface
-- [ ] RAG retrieval system
-- [ ] LLM integration
+- [x] RAG retrieval system (✅ Hybrid search implemented)
+- [x] Vector storage with Qdrant
+- [ ] LLM integration for chat
 - [ ] Context management
 - [ ] Response streaming
 
