@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Column, String, Integer, DateTime, Text, Float, ForeignKey, Index, JSON
+from sqlalchemy import Column, String, Integer, DateTime, Text, Float, ForeignKey, Index, JSON, Boolean
 from sqlalchemy.orm import relationship
 
 from .connection import Base
@@ -22,7 +22,7 @@ class Company(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    filings = relationship("Filing", back_populates="company", cascade="all, delete-orphan")
+    filings = relationship("Filing", foreign_keys="Filing.company_id", back_populates="company", cascade="all, delete-orphan")
 
 
 class Filing(Base):
@@ -62,7 +62,8 @@ class Filing(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    company = relationship("Company", back_populates="filings")
+    company = relationship("Company", foreign_keys=[company_id], back_populates="filings")
+    issuer_company = relationship("Company", foreign_keys=[issuer_company_id])
     documents = relationship("FilingDocument", back_populates="filing", cascade="all, delete-orphan")
     chunks = relationship("FilingChunk", back_populates="filing", cascade="all, delete-orphan")
 
