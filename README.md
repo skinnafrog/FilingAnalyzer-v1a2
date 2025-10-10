@@ -38,10 +38,17 @@ AI-powered SEC filing analysis platform with automated ingestion, knowledge grap
 
 3. **Start all services**
    ```bash
-   docker-compose up -d
+   ./start.sh
+   # OR manually: docker-compose up -d
    ```
 
-4. **Verify services are running**
+4. **Stop all services**
+   ```bash
+   ./stop.sh
+   # OR manually: docker-compose down
+   ```
+
+5. **Verify services are running**
    ```bash
    docker-compose ps
    # All containers should show as "running" or "healthy"
@@ -76,7 +83,8 @@ v1a2/
 │   │   ├── ingestion/     # SEC filing pipeline
 │   │   │   ├── rss_monitor.py       # RSS feed discovery
 │   │   │   ├── filing_downloader.py # Document retrieval
-│   │   │   └── docling_processor.py # Content extraction
+│   │   │   ├── docling_processor.py # Content extraction
+│   │   │   └── issuer_extractor.py  # Form 3/4/5 issuer identification
 │   │   ├── knowledge/     # RAG and knowledge graph
 │   │   │   ├── rag_pipeline.py      # Embeddings & indexing
 │   │   │   ├── vector_store.py      # Qdrant integration
@@ -245,13 +253,18 @@ docker-compose down
    docker-compose up -d    # Restart
    ```
 
-### Known Limitations
+### Recent Improvements
 
-1. **Form 3/4/5 Company Identification**
-   - These insider ownership forms show the filer's name (person) instead of the company
-   - The actual company whose securities are being reported is not extracted
-   - See [FORM_345_ISSUE.md](./FORM_345_ISSUE.md) for details and workarounds
-   - This does NOT affect 10-K, 10-Q, 8-K, or other standard company filings
+1. **✅ Form 3/4/5 Issuer Identification - RESOLVED**
+   - **Issue**: Insider ownership forms previously showed filer's name instead of issuer company
+   - **Solution**: Implemented dedicated issuer extraction for Form 3/4/5 filings
+   - **Features**:
+     - Automatic detection of Form 3/4/5 filings during ingestion
+     - Advanced regex patterns for issuer company extraction (15+ patterns)
+     - Separate tracking of reporting owner vs. issuer company
+     - Database schema enhancement with new issuer-specific fields
+     - Confidence scoring for extraction quality
+   - **Impact**: Chat queries now correctly identify issuer companies for insider filings
 
 ## 📝 Next Steps
 

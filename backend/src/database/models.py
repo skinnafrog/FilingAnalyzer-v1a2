@@ -36,6 +36,14 @@ class Filing(Base):
     filing_date = Column(DateTime, nullable=False, index=True)
     document_count = Column(Integer, default=1)
 
+    # For Form 3/4/5: Distinguish between reporting owner and issuer
+    issuer_company_id = Column(Integer, ForeignKey("companies.id"))
+    issuer_cik = Column(String(10))
+    issuer_name = Column(String(255))
+    issuer_ticker = Column(String(10))
+    reporting_owner_name = Column(String(255))
+    is_insider_filing = Column(Boolean, default=False)
+
     # Processing status
     status = Column(String(20), default="pending", index=True)  # pending, processing, completed, failed
     processed_at = Column(DateTime)

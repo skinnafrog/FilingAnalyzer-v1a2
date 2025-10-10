@@ -19,6 +19,7 @@ from docling.datamodel.document import ConversionResult
 
 from ..config.settings import Settings, get_settings
 from ..models.filing import SECFiling, ProcessingStage
+from .issuer_extractor import IssuerExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,9 @@ class DoclingProcessor:
         self.processed_count = 0
         self.failed_count = 0
         self.total_processing_time = 0.0
+
+        # Initialize issuer extractor for Form 3/4/5 filings
+        self.issuer_extractor = IssuerExtractor()
 
     def _init_converter(self):
         """Initialize Docling converter with pipeline options."""
@@ -154,6 +158,20 @@ class DoclingProcessor:
             shareholder_data = await self._extract_shareholder_info(extracted_data)
             filing.shareholders = shareholder_data.get("shareholders", [])
             filing.equity_issuances = shareholder_data.get("equity_issuances", [])
+
+            # Extract issuer information for Form 3/4/5 filings
+            issuer_data = await self.issuer_extractor.extract_issuer_info(extracted_data, filing.form_type)
+            if issuer_data.get("is_insider_filing"):
+                filing.issuer_name = issuer_data.get("issuer_name")
+                filing.issuer_cik = issuer_data.get("issuer_cik")
+                filing.issuer_ticker = issuer_data.get("issuer_ticker")
+                filing.reporting_owner_name = issuer_data.get("reporting_owner_name")
+                filing.is_insider_filing = True
+                logger.info(
+                    f"Extracted issuer info for {filing.accession_number}: "
+                    f"Issuer={issuer_data.get('issuer_name')}, "
+                    f"Owner={issuer_data.get('reporting_owner_name')}"
+                )
 
             # Save processed data
             processed_file = await self._save_processed_data(filing, extracted_data)

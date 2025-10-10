@@ -344,18 +344,33 @@ class RSSFeedEntry(BaseModel):
             except:
                 pass
 
+        # Handle Form 3/4/5 filings differently - RSS company_name is actually reporting owner
+        form_type_str = self.form_type or "OTHER"
+        is_insider_filing = form_type_str in ["3", "4", "5", "Form 3", "Form 4", "Form 5"]
+
+        if is_insider_filing:
+            # For insider filings, RSS company_name is the reporting owner, not the issuer
+            company_name = None  # Will be populated by issuer extractor
+            reporting_owner_name = self.company_name or self.title
+        else:
+            # For regular filings, company_name is correct
+            company_name = self.company_name or self.title
+            reporting_owner_name = None
+
         return SECFiling(
             accession_number=self.accession_number or "",
-            company_name=self.company_name or self.title,
+            company_name=company_name,
             cik_number=self.cik_number or "",
-            form_type=FilingType.from_string(self.form_type or "OTHER"),
+            form_type=FilingType.from_string(form_type_str),
             filing_date=filing_date_parsed or self.published,
             acceptance_datetime=acceptance_dt_parsed,
             period_date=period_date_parsed,
             file_number=self.file_number,
             filing_url=self.link,
             status=FilingStatus.DISCOVERED,
-            current_stage=ProcessingStage.RSS_DISCOVERY
+            current_stage=ProcessingStage.RSS_DISCOVERY,
+            reporting_owner_name=reporting_owner_name,
+            is_insider_filing=is_insider_filing
         )
 
 
