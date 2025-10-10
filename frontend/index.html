@@ -395,6 +395,8 @@
 
                             if (data.type === 'start') {
                                 sessionId = data.session_id;
+                                localStorage.setItem('chatSessionId', sessionId);
+                                displaySessionContext();
                             } else if (data.type === 'sources') {
                                 updateSources(data.sources);
                             } else if (data.type === 'content') {

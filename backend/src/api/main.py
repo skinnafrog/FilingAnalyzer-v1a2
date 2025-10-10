@@ -19,6 +19,7 @@ from ..knowledge.rag_pipeline import RAGPipeline
 from ..models.filing import SECFiling
 from ..database import init_db, get_db
 from ..database.models import Filing, Company, FilingDocument, FilingChunk
+from .session_manager import session_manager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -74,8 +75,12 @@ async def startup_event():
     try:
         init_db()
         logger.info("Database initialized successfully")
+
+        # Start session manager
+        await session_manager.start()
+        logger.info("Session manager started")
     except Exception as e:
-        logger.error(f"Failed to initialize database: {e}")
+        logger.error(f"Failed to initialize services: {e}")
 
 
 # Request/Response models
@@ -176,7 +181,8 @@ async def health_check():
         "timestamp": datetime.utcnow(),
         "services": {
             "api": "running",
-            "rag_pipeline": rag_pipeline.get_statistics() if rag_pipeline else None
+            "rag_pipeline": rag_pipeline.get_statistics() if rag_pipeline else None,
+            "session_manager": session_manager.get_stats()
         }
     }
 
@@ -188,24 +194,71 @@ async def chat(request: ChatRequest):
     Supports both standard and streaming responses.
     """
     try:
-        # Generate session ID if not provided
-        session_id = request.session_id or str(uuid.uuid4())
+        # Get or create session
+        session = session_manager.get_or_create_session(request.session_id)
+        session_id = session.session_id
+
+        # Get conversation context from session
+        conversation_context = session_manager.get_conversation_context(session_id)
 
         # Process query through RAG pipeline
-        logger.info(f"Processing chat query: {request.query[:100]}...")
+        logger.info(f"Processing chat query: {request.query[:100]}... (session: {session_id})")
 
-        # Retrieve relevant documents
+        # Check if query mentions analyzing a specific filing
+        import re
+        if "analyze" in request.query.lower() or request.filters.get("accession_number"):
+            acc_number = request.filters.get("accession_number")
+            if not acc_number:
+                # Try to extract from query
+                acc_pattern = r'\d{10}-\d{2}-\d{6}'
+                match = re.search(acc_pattern, request.query)
+                if match:
+                    acc_number = match.group()
+
+            if acc_number:
+                # Retrieve filing details for context
+                db = next(get_db())
+                filing = db.query(Filing).filter(Filing.accession_number == acc_number).first()
+                if filing:
+                    # Set filing context in session
+                    filing_context = {
+                        "accession_number": filing.accession_number,
+                        "company_name": filing.company.name if filing.company else "Unknown",
+                        "form_type": filing.form_type,
+                        "filing_date": filing.filing_date.isoformat() if filing.filing_date else "",
+                        "ticker_symbol": filing.company.ticker if filing.company else None,
+                        "cik_number": filing.company.cik if filing.company else None
+                    }
+                    session_manager.update_filing_context(session_id, filing_context)
+                    # Add this as a filter for retrieval
+                    request.filters["accession_number"] = acc_number
+                db.close()
+
+        # Retrieve relevant documents - prioritize current filing context if available
+        filters = request.filters.copy()
+        if session.current_filing and not filters.get("accession_number"):
+            # If we have a filing context but no explicit filter, add it
+            filters["accession_number"] = session.current_filing.accession_number
+
         retrieved_docs = await rag_pipeline.retrieve(
             query=request.query,
-            filters=request.filters,
+            filters=filters,
             limit=5
         )
 
-        # Generate response
+        # Generate response with full conversation context
         response = await rag_pipeline.generate_response(
             query=request.query,
             context=retrieved_docs,
-            chat_history=request.context
+            chat_history=conversation_context  # Use session conversation context
+        )
+
+        # Add interaction to session
+        session_manager.add_interaction(
+            session_id=session_id,
+            user_message=request.query,
+            assistant_response=response,
+            sources=retrieved_docs
         )
 
         # Format sources
@@ -244,15 +297,50 @@ async def chat_stream(request: ChatRequest):
     """
     async def generate():
         try:
-            session_id = request.session_id or str(uuid.uuid4())
+            # Get or create session
+            session = session_manager.get_or_create_session(request.session_id)
+            session_id = session.session_id
+
+            # Get conversation context from session
+            conversation_context = session_manager.get_conversation_context(session_id)
 
             # Send initial message
             yield f"data: {json.dumps({'type': 'start', 'session_id': session_id})}\n\n"
 
-            # Retrieve relevant documents
+            # Check for filing context
+            import re
+            if "analyze" in request.query.lower() or request.filters.get("accession_number"):
+                acc_number = request.filters.get("accession_number")
+                if not acc_number:
+                    acc_pattern = r'\d{10}-\d{2}-\d{6}'
+                    match = re.search(acc_pattern, request.query)
+                    if match:
+                        acc_number = match.group()
+
+                if acc_number:
+                    db = next(get_db())
+                    filing = db.query(Filing).filter(Filing.accession_number == acc_number).first()
+                    if filing:
+                        filing_context = {
+                            "accession_number": filing.accession_number,
+                            "company_name": filing.company.name if filing.company else "Unknown",
+                            "form_type": filing.form_type,
+                            "filing_date": filing.filing_date.isoformat() if filing.filing_date else "",
+                            "ticker_symbol": filing.company.ticker if filing.company else None,
+                            "cik_number": filing.company.cik if filing.company else None
+                        }
+                        session_manager.update_filing_context(session_id, filing_context)
+                        request.filters["accession_number"] = acc_number
+                    db.close()
+
+            # Retrieve relevant documents with session context
+            filters = request.filters.copy()
+            if session.current_filing and not filters.get("accession_number"):
+                filters["accession_number"] = session.current_filing.accession_number
+
             retrieved_docs = await rag_pipeline.retrieve(
                 query=request.query,
-                filters=request.filters,
+                filters=filters,
                 limit=5
             )
 
@@ -268,14 +356,24 @@ async def chat_stream(request: ChatRequest):
             ]
             yield f"data: {json.dumps({'type': 'sources', 'sources': sources})}\n\n"
 
-            # Stream response generation
+            # Stream response generation with session context
+            full_response = ""
             async for chunk in rag_pipeline.generate_response_stream(
                 query=request.query,
                 context=retrieved_docs,
-                chat_history=request.context
+                chat_history=conversation_context  # Use session conversation context
             ):
+                full_response += chunk
                 yield f"data: {json.dumps({'type': 'content', 'content': chunk})}\n\n"
                 await asyncio.sleep(0.01)  # Small delay for smooth streaming
+
+            # Add interaction to session after streaming completes
+            session_manager.add_interaction(
+                session_id=session_id,
+                user_message=request.query,
+                assistant_response=full_response,
+                sources=retrieved_docs
+            )
 
             # Send completion message
             yield f"data: {json.dumps({'type': 'complete'})}\n\n"

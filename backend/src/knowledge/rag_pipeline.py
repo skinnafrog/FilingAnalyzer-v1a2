@@ -978,10 +978,17 @@ class RAGPipeline:
             # Add chat history if provided
             if chat_history:
                 for msg in chat_history[-5:]:  # Last 5 messages
-                    messages.append({
-                        "role": msg.role,
-                        "content": msg.content
-                    })
+                    # Handle both dict and object formats
+                    if isinstance(msg, dict):
+                        messages.append({
+                            "role": msg.get("role", "user"),
+                            "content": msg.get("content", "")
+                        })
+                    else:
+                        messages.append({
+                            "role": msg.role if hasattr(msg, 'role') else 'user',
+                            "content": msg.content if hasattr(msg, 'content') else str(msg)
+                        })
 
             # Extract metadata about specific filing if mentioned in query
             query_metadata = {}
@@ -1047,10 +1054,17 @@ class RAGPipeline:
             # Add chat history if provided
             if chat_history:
                 for msg in chat_history[-5:]:
-                    messages.append({
-                        "role": msg.role if hasattr(msg, 'role') else 'user',
-                        "content": msg.content if hasattr(msg, 'content') else str(msg)
-                    })
+                    # Handle both dict and object formats
+                    if isinstance(msg, dict):
+                        messages.append({
+                            "role": msg.get("role", "user"),
+                            "content": msg.get("content", "")
+                        })
+                    else:
+                        messages.append({
+                            "role": msg.role if hasattr(msg, 'role') else 'user',
+                            "content": msg.content if hasattr(msg, 'content') else str(msg)
+                        })
 
             # Extract metadata about specific filing if mentioned in query
             query_metadata = {}
