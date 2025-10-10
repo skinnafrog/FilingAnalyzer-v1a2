@@ -245,6 +245,14 @@ docker-compose down
    docker-compose up -d    # Restart
    ```
 
+### Known Limitations
+
+1. **Form 3/4/5 Company Identification**
+   - These insider ownership forms show the filer's name (person) instead of the company
+   - The actual company whose securities are being reported is not extracted
+   - See [FORM_345_ISSUE.md](./FORM_345_ISSUE.md) for details and workarounds
+   - This does NOT affect 10-K, 10-Q, 8-K, or other standard company filings
+
 ## 📝 Next Steps
 
 ### Phase 2: Backend Infrastructure
