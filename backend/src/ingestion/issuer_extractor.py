@@ -20,6 +20,12 @@ class IssuerExtractor:
 
         # Issuer identification patterns for Form 3/4/5
         self.issuer_patterns = [
+            # Form 3/4/5 specific: "3. Issuer Name and Ticker" section with HTML
+            r'3\.\s*Issuer\s+Name.*?<a[^>]*>([A-Z][A-Za-z0-9\s&,\.\-]+(?:INC|CORP|COMPANY|LLC|LP|LTD|CO)\.?)</a>',
+
+            # Alternative HTML pattern for issuer name in anchor tags
+            r'<a[^>]*getcompany[^>]*>([A-Z][A-Za-z0-9\s&,\.\-]+(?:INC|CORP|COMPANY|LLC|LP|LTD|CO)\.?)</a>',
+
             # "Issuer Name: COMPANY NAME INC" format
             r"issuer\s+name:\s*([A-Z][A-Za-z0-9\s&,\.\-]+(?:Inc|Corp|Company|LLC|LP|Ltd|Co)\.?)",
 
@@ -38,6 +44,10 @@ class IssuerExtractor:
 
         # CIK patterns
         self.cik_patterns = [
+            # Form 3/4/5 specific: CIK in URL within anchor tag
+            r'<a[^>]*CIK=(\d{10})[^>]*>',
+
+            # Standard patterns
             r"(?:issuer\s+)?(?:central\s+index\s+key|cik):\s*(\d{10})",
             r"cik\s+no\.?\s*(\d{10})",
             r"central\s+index\s+key\s+number:\s*(\d{10})",
@@ -45,6 +55,13 @@ class IssuerExtractor:
 
         # Ticker symbol patterns
         self.ticker_patterns = [
+            # Form 3/4/5 specific: ticker in brackets after issuer name
+            r'\[\s*<span[^>]*>([A-Z]{1,5})</span>\s*\]',
+
+            # Alternative bracket formats
+            r'\[\s*([A-Z]{1,5})\s*\]',
+
+            # Standard patterns
             r"(?:trading\s+symbol|ticker\s+symbol|symbol):\s*([A-Z]{1,5})",
             r"nasdaq\s+symbol:\s*([A-Z]{1,5})",
             r"nyse\s+symbol:\s*([A-Z]{1,5})",

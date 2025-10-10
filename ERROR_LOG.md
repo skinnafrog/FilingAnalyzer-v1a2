@@ -20,6 +20,21 @@ This document tracks all significant changes, bug fixes, enhancements, and syste
 
 ## 📈 Recent Changes
 
+### [2025-10-10 04:15] - BUG FIX - Form 3/4/5 Issuer Extraction Enhancement
+**Issue:** Form 3 filing 0002091230-25-000002 showing "Sutherland Gregory David" as issuer instead of actual issuer company "SAGA COMMUNICATIONS INC"
+**Root Cause:** Issuer extraction patterns not designed to handle HTML-formatted Form 3/4/5 filings where issuer information is embedded in anchor tags and span elements
+**Solution:** Enhanced issuer extraction patterns in IssuerExtractor to handle HTML formats:
+- Added HTML anchor tag pattern for issuer names: `<a[^>]*getcompany[^>]*>([A-Z][A-Za-z0-9\s&,\.\-]+(?:INC|CORP|COMPANY|LLC|LP|LTD|CO)\.?)</a>`
+- Added CIK extraction from URL: `<a[^>]*CIK=(\d{10})[^>]*>`
+- Added ticker extraction from HTML spans with brackets: `\[\s*<span[^>]*>([A-Z]{1,5})</span>\s*\]`
+- Direct database update for the specific filing with correct values
+**Files Modified:**
+- `backend/src/ingestion/issuer_extractor.py` (enhanced patterns for HTML form parsing)
+- Database record for accession number 0002091230-25-000002 (direct issuer information update)
+**Impact:** Fixed specific filing and enhanced issuer extraction for future Form 3/4/5 filings, backend restart required
+**Status:** ✅ Resolved
+**Restart Required:** Yes - Applied via `docker-compose restart backend`
+
 ### [2025-10-10 03:30] - ENHANCEMENT - Comprehensive Change Tracking System
 **Issue:** Need systematic tracking of changes, bug fixes, and enhancements with automated GitHub integration
 **Root Cause:** No centralized change management or documentation requirements for modifications
